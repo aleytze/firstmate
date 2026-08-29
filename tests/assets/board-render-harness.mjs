@@ -5,7 +5,7 @@
 // Usage: node board-render-harness.mjs <built-board.html>
 // Prints one JSON document:
 //   { stats:[{n,label}],
-//     underway|landed|charted:[{title,sub,badges,pickable,tooltip,disclosure}],
+//     underway|landed|charted:[{title,sub,badges,pickable,textTag,tooltip,disclosure}],
 //     presses:[{open,expanded,tooltip}], empty, more, error }
 // The shim has no layout, so it reports what the renderer builds unconditionally
 // and never what a real browser measures: the clamp and the clipped-row pass are

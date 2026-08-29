@@ -528,17 +528,31 @@ __FM_BEARINGS_BOARD_DATA__
     main.appendChild(title);
     main.appendChild(sub);
     main.appendChild(more);
+    var entry = { row: row, main: main, more: more, title: title, sub: sub, full: full };
     more.addEventListener("click", function () {
       var open = !row.classList.contains("is-open");
       row.classList.toggle("is-open", open);
       more.setAttribute("aria-expanded", open ? "true" : "false");
+      syncRowTooltip(entry);
       /* opening a row changes every row's width the moment a scrollbar appears,
          so what still clips is re-decided rather than left as it was measured */
       requestMeasure();
     });
     row.appendChild(main);
-    discloseRows.push({ row: row, main: main, more: more, title: title, sub: sub, full: full });
+    discloseRows.push(entry);
     return main;
+  }
+
+  /* The hover tooltip is the mouse's way to the text a row is hiding, so it
+     belongs to exactly one state: collapsed, with something still hidden. An
+     open row shows every character already, and a row that never clipped has
+     nothing to recover, so both drop it rather than repeating what is on
+     screen. Whether a row hides anything is what the chevron's own enabled
+     state records, measured or failed open, so this reads that rather than
+     deciding it again. */
+  function syncRowTooltip(r) {
+    if (r.more.disabled || r.row.classList.contains("is-open")) r.main.removeAttribute("title");
+    else r.main.setAttribute("title", r.full);
   }
 
   /* Progressive enhancement, and deliberately optional: where a layout engine
@@ -549,26 +563,24 @@ __FM_BEARINGS_BOARD_DATA__
   var measureTimer;
   function measureClippedRows() {
     discloseRows.forEach(function (r) {
-      if (r.row.classList.contains("is-open")) return;
+      if (r.row.classList.contains("is-open")) { syncRowTooltip(r); return; }
       var clipped = r.title.scrollHeight - r.title.clientHeight > 1 ||
                     r.sub.scrollHeight - r.sub.clientHeight > 1;
       r.row.classList.toggle("bb-row--clip", clipped);
       r.more.disabled = !clipped;
-      /* the tooltip exists to recover clamped text, so a row that hides
-         nothing drops it rather than repeating what is already on screen */
-      if (clipped) r.main.setAttribute("title", r.full);
-      else r.main.removeAttribute("title");
+      syncRowTooltip(r);
     });
   }
   /* Any later failure lands where the first one does: every row goes back to
-     being expandable and tooltipped, which is the state that hides nothing. */
+     being expandable, and every collapsed one to being tooltipped, which is the
+     state that hides nothing. */
   function measureFailOpen() {
     measureEnabled = false;
     try {
       document.body.classList.remove("bb-measured");
       discloseRows.forEach(function (r) {
         r.more.disabled = false;
-        r.main.setAttribute("title", r.full);
+        syncRowTooltip(r);
       });
     } catch (openError) { /* nothing further to fall back to */ }
   }

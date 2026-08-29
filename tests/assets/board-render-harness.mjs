@@ -6,7 +6,7 @@
 // Prints one JSON document:
 //   { stats:[{n,label}],
 //     underway|landed|charted:[{title,sub,badges,pickable,tooltip,disclosure}],
-//     presses:[{open,expanded}], empty, more, error }
+//     presses:[{open,expanded,tooltip}], empty, more, error }
 // The shim has no layout, so it reports what the renderer builds unconditionally
 // and never what a real browser measures: the clamp and the clipped-row pass are
 // verified in a browser, not here. Pressing the disclosure needs no layout, so
@@ -150,12 +150,13 @@ const underway = underwayNodes.map(reportRow);
 const landed = landedNodes.map(reportRow);
 
 // Opening a row needs no layout engine, so the shim presses the chevron twice
-// and reports what the row and the button became each time.
+// and reports what the row, the button and the hover tooltip became each time.
 const pressDisclosure = (row) => {
   const more = chevronOf(row);
   if (!more) return null;
   more.dispatch("click");
-  return { open: row.classList.contains("is-open"), expanded: more.getAttribute("aria-expanded") };
+  return { open: row.classList.contains("is-open"), expanded: more.getAttribute("aria-expanded"),
+    tooltip: mainOf(row).getAttribute("title") };
 };
 const firstRow = chartedNodes[0] ?? underwayNodes[0] ?? landedNodes[0];
 const presses = firstRow ? [pressDisclosure(firstRow), pressDisclosure(firstRow)] : [];

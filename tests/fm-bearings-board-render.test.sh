@@ -187,9 +187,25 @@ test_pressing_the_disclosure_opens_and_closes_the_row() {
   home=$(make_home disclosure-toggle)
   out=$(render_payload "$home" "$(long_payload)")
   printf '%s' "$out" | jq -e '
-    .presses == [{open:true, expanded:"true"}, {open:false, expanded:"false"}]
+    (.presses[0] | .open == true and .expanded == "true")
+      and (.presses[1] | .open == false and .expanded == "false")
   ' >/dev/null || fail "pressing the disclosure did not open and then close the row: $out"
   pass "pressing a row's disclosure opens it, and pressing again closes it"
+}
+
+# A tooltip repeating text that is already fully on screen is noise, and the
+# hover panel can cover the very content it duplicates, so the tooltip belongs
+# to a collapsed row only.
+test_expanding_a_row_drops_its_now_redundant_tooltip() {
+  local home out
+  home=$(make_home disclosure-tooltip)
+  out=$(render_payload "$home" "$(long_payload)")
+  printf '%s' "$out" | jq -e --arg t "$LONG_TITLE" '
+    (.charted[0].tooltip | contains($t))
+      and (.presses[0] | .open == true and .tooltip == null)
+      and (.presses[1] | .open == false and (.tooltip | contains($t)))
+  ' >/dev/null || fail "the tooltip did not follow the row open and closed again: $out"
+  pass "expanding a row drops its redundant tooltip, and collapsing restores it"
 }
 
 test_the_charted_reason_survives_the_row_in_full() {
@@ -211,4 +227,5 @@ test_omitted_warnings_never_count_as_more_queued
 test_an_omitted_kind_keeps_the_existing_queued_rendering
 test_every_compact_row_reaches_its_full_text_through_one_disclosure
 test_pressing_the_disclosure_opens_and_closes_the_row
+test_expanding_a_row_drops_its_now_redundant_tooltip
 test_the_charted_reason_survives_the_row_in_full

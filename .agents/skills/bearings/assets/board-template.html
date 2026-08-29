@@ -234,17 +234,66 @@ a { color: inherit; text-decoration: none; }
 .bb-freeform:focus { outline: none; border-color: var(--rust-400); box-shadow: var(--focus-ring); }
 
 /* ---- compact rows (Underway / Landed / Charted) ---- */
+/* These rows live in a half-width column, so their text is routinely wider than
+   the space it has. A single clamped line hid it outright - worst on Charted
+   Next, whose second line is "<reason> · <repo>", so the reason a task is
+   waiting was the first thing an ellipsis ate. Two changes fix that without
+   spending the density these rows exist for: the collapsed row clamps to two
+   wrapped lines instead of one truncated one, and the whole text block is a
+   real disclosure button that opens the rest in place. One button serves
+   pointer, touch, and keyboard alike; a native tooltip carries the same text
+   for a mouse hover; and a screen reader reads the full untruncated string
+   either way, because the clamp is only visual. */
 .bb-rows { display: flex; flex-direction: column; }
 .bb-row {
   display: flex; align-items: center; gap: 12px; padding: 11px 18px;
   border-top: 1px solid var(--border-soft); min-width: 0;
 }
 .bb-row:first-child { border-top: none; }
-.bb-row__main { min-width: 0; flex: 1 1 auto; }
-.bb-row__title { font-size: var(--fs-sm); font-weight: 700; color: var(--text-strong); line-height: 1.3;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bb-row__sub { font-size: var(--fs-xs); color: var(--text-muted); line-height: 1.3; margin-top: 1px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* an opened row is tall, so its checkbox, badge, and link ride the first line
+   rather than floating at the middle of the expanded block */
+.bb-row.is-open { align-items: flex-start; }
+
+/* The text block: a bare button laid out as a grid so the title, the sub line,
+   and the chevron stay siblings and the text column can shrink to zero. */
+.bb-row__main {
+  min-width: 0; flex: 1 1 auto;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "title more" "sub more";
+  column-gap: 10px; align-items: start;
+  margin: 0; padding: 0; border: 0; background: none; color: inherit;
+  font: inherit; text-align: left; -webkit-appearance: none; appearance: none;
+  border-radius: var(--radius-sm); cursor: pointer;
+}
+.bb-row__main:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* a row with nothing hidden is not a disclosure: it leaves the tab order and
+   drops its affordance rather than offering an expand that reveals nothing */
+.bb-row__main:disabled { cursor: default; }
+.bb-row__main:not(:disabled):hover .bb-row__title {
+  text-decoration: underline; text-decoration-color: var(--ink-300); text-underline-offset: 2px;
+}
+.bb-row__title, .bb-row__sub {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  overflow: hidden; min-width: 0; overflow-wrap: anywhere;
+}
+.bb-row__title { grid-area: title; font-size: var(--fs-sm); font-weight: 700; color: var(--text-strong); line-height: 1.3; }
+.bb-row__sub { grid-area: sub; font-size: var(--fs-xs); color: var(--text-muted); line-height: 1.3; margin-top: 1px; }
+.bb-row.is-open .bb-row__title, .bb-row.is-open .bb-row__sub {
+  display: block; -webkit-line-clamp: none; line-clamp: none; overflow: visible;
+}
+.bb-row__more {
+  grid-area: more; align-self: center; display: inline-grid; place-items: center;
+  width: 22px; height: 22px; flex: none; color: var(--text-faint);
+  background: var(--surface-card-warm); border: 1px solid var(--border-soft);
+  border-radius: var(--radius-xs); transition: transform 120ms, color 120ms, border-color 120ms;
+}
+.bb-row__more svg { width: 13px; height: 13px; }
+.bb-row__main:not(:disabled):hover .bb-row__more { color: var(--text-body); border-color: var(--ink-300); }
+.bb-row.is-open .bb-row__more { transform: rotate(180deg); }
+/* Before the clip measurement runs - and anywhere it cannot - every row keeps
+   its affordance, so the text is never unreachable. Once measured, only rows
+   that actually hide something advertise it. */
+body.bb-measured .bb-row:not(.bb-row--clip) .bb-row__more { visibility: hidden; }
 .bb-row__id { font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--text-faint); white-space: nowrap; }
 .bb-row__pr { font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 600; color: var(--ocean-600); white-space: nowrap; }
 .bb-row__pr:hover { text-decoration: underline; }
@@ -443,6 +492,54 @@ __FM_BEARINGS_BOARD_DATA__
   var chartedMoreWarnings = data.charted_warning_more || 0;
   function utf8ByteLength(text) { return new TextEncoder().encode(text).length; }
   var CHECK_SVG = '<svg class="fm-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+  var CHEVRON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+
+  /* One text block for every compact row in Underway, Recently Landed and
+     Charted Next. The button carries the complete title and sub line as its own
+     text, so nothing is shortened in the DOM: the two-line clamp is CSS only,
+     the tooltip repeats it for a mouse, and pressing the button opens the row
+     in place for touch and keyboard. */
+  var discloseRows = [];
+  function addRowText(row, titleText, subText) {
+    var main = el("button", "bb-row__main");
+    main.type = "button";
+    main.setAttribute("aria-expanded", "false");
+    var full = subText ? titleText + "\n" + subText : titleText;
+    main.setAttribute("title", full);
+    var title = el("span", "bb-row__title", titleText);
+    var sub = el("span", "bb-row__sub", subText);
+    var chevron = el("span", "bb-row__more");
+    chevron.innerHTML = CHEVRON_SVG;
+    main.appendChild(title);
+    main.appendChild(sub);
+    main.appendChild(chevron);
+    main.addEventListener("click", function () {
+      var open = !row.classList.contains("is-open");
+      row.classList.toggle("is-open", open);
+      main.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    row.appendChild(main);
+    discloseRows.push({ row: row, main: main, title: title, sub: sub, full: full });
+    return main;
+  }
+
+  /* Progressive enhancement, and deliberately optional: where a layout engine
+     can say which rows actually hide text, only those keep the affordance and
+     stay in the tab order. Where it cannot, every row stays expandable, so the
+     text is never unreachable. */
+  function measureClippedRows() {
+    discloseRows.forEach(function (r) {
+      if (r.row.classList.contains("is-open")) return;
+      var clipped = r.title.scrollHeight - r.title.clientHeight > 1 ||
+                    r.sub.scrollHeight - r.sub.clientHeight > 1;
+      r.row.classList.toggle("bb-row--clip", clipped);
+      r.main.disabled = !clipped;
+      /* the tooltip exists to recover clamped text, so a row that hides
+         nothing drops it rather than repeating what is already on screen */
+      if (clipped) r.main.setAttribute("title", r.full);
+      else r.main.removeAttribute("title");
+    });
+  }
 
   document.getElementById("bb-provenance").textContent = data.schema + " · " + data.generated;
 
@@ -612,12 +709,9 @@ __FM_BEARINGS_BOARD_DATA__
   data.underway.forEach(function (t) {
     var row = el("div", "bb-row");
     row.appendChild(badge(t.state === "working" ? "online" : "info", t.state));
-    var main = el("div", "bb-row__main");
-    main.appendChild(el("div", "bb-row__title", t.doing));
     /* captain-facing rows name the repo; the internal task id shows only when
        no repo is known */
-    main.appendChild(el("div", "bb-row__sub", t.kind + " · " + (t.repo || t.id)));
-    row.appendChild(main);
+    addRowText(row, t.doing, t.kind + " · " + (t.repo || t.id));
     uw.appendChild(row);
   });
 
@@ -629,10 +723,7 @@ __FM_BEARINGS_BOARD_DATA__
     var chk = el("span", "bb-row__check");
     chk.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
     row.appendChild(chk);
-    var main = el("div", "bb-row__main");
-    main.appendChild(el("div", "bb-row__title", t.what));
-    main.appendChild(el("div", "bb-row__sub", (t.repo || t.id) + " · " + t.owner));
-    row.appendChild(main);
+    addRowText(row, t.what, (t.repo || t.id) + " · " + t.owner);
     if (t.pr_url) {
       var a = el("a", "bb-row__pr", "#" + t.pr_url.split("/").pop());
       a.href = t.pr_url; a.title = t.pr_url; a.target = "_blank"; a.rel = "noopener";
@@ -679,12 +770,10 @@ __FM_BEARINGS_BOARD_DATA__
     } else {
       row.appendChild(el("span", "bb-pick-spacer"));
     }
-    var main = el("div", "bb-row__main");
-    main.appendChild(el("div", "bb-row__title", t.title));
-    /* second line keeps the title uncrowded in the half-width column */
+    /* second line keeps the title uncrowded in the half-width column; the
+       reason leads it, because why work waits is what the captain reads for */
     var chSub = t.repo || t.id;
-    main.appendChild(el("div", "bb-row__sub", t.reason ? t.reason + " · " + chSub : chSub));
-    row.appendChild(main);
+    addRowText(row, t.title, t.reason ? t.reason + " · " + chSub : chSub);
     if (isWarning(t)) row.appendChild(badge("danger", "needs repair"));
     else if (t.reason) row.appendChild(badge("warn", "waiting"));
     ch.appendChild(row);
@@ -721,6 +810,28 @@ __FM_BEARINGS_BOARD_DATA__
       }
       bar.classList.add("is-queued");
     });
+  }
+
+  /* Measure once the rows are in the document but before the first paint, so a
+     row never flashes an affordance it does not need, then again whenever the
+     widths or the metrics change: a late webfont and a resized window both move
+     where the text stops fitting. Failure here is not a board failure - every
+     row simply stays expandable. */
+  if (discloseRows.length && document.body && document.body.classList) {
+    try {
+      measureClippedRows();
+      document.body.classList.add("bb-measured");
+      if (window.addEventListener) {
+        var measureTimer;
+        window.addEventListener("resize", function () {
+          clearTimeout(measureTimer);
+          measureTimer = setTimeout(measureClippedRows, 120);
+        });
+      }
+      if (document.fonts && document.fonts.ready && document.fonts.ready.then) {
+        document.fonts.ready.then(measureClippedRows, function () {});
+      }
+    } catch (measureError) { /* leave every row expandable */ }
   }
   } catch (e) {
     renderBoardError("The board data could not be rendered");

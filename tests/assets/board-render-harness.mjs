@@ -3,7 +3,13 @@
 // asserted through the real template rather than by reading its source.
 //
 // Usage: node board-render-harness.mjs <built-board.html>
-// Prints one JSON document: { stats:[{n,label}], charted:[{title,sub,badges,pickable}] }
+// Prints one JSON document:
+//   { stats:[{n,label}],
+//     underway|landed|charted:[{title,sub,badges,pickable,disclosure}],
+//     empty, more, error }
+// The shim has no layout, so it reports what the renderer builds unconditionally
+// and never what a real browser measures: the clamp and the clipped-row pass are
+// verified in a browser, not here.
 import { readFileSync } from "node:fs";
 
 const html = readFileSync(process.argv[2], "utf8");
@@ -35,6 +41,7 @@ class Node {
   set textContent(v) { this._text = String(v); this.children = []; }
   appendChild(n) { n.parentNode = this; this.children.push(n); return n; }
   setAttribute(k, v) { this.attributes[k] = v; }
+  getAttribute(k) { return Object.prototype.hasOwnProperty.call(this.attributes, k) ? this.attributes[k] : null; }
   addEventListener() {}
   querySelectorAll(sel) {
     const want = sel.replace(/^\./, "").replace(/:checked$/, "");
@@ -93,18 +100,30 @@ const stats = strip.children.map((t) => ({
   label: t.children.find((c) => c.className.includes("bb-stat__label"))?.textContent,
 }));
 
+const rowsOf = (containerId) =>
+  (byId.get(containerId) || new Node("div")).children
+    .filter((r) => r.className.split(/\s+/).includes("bb-row"))
+    .map((row) => {
+      const main = row.children.find((c) => c.className.includes("bb-row__main"));
+      return {
+        title: main?.children.find((c) => c.className.includes("bb-row__title"))?.textContent ?? "",
+        sub: main?.children.find((c) => c.className.includes("bb-row__sub"))?.textContent ?? "",
+        badges: badgesOf(row),
+        pickable: row.children.some((c) => c.className.includes("bb-pick") && !c.className.includes("spacer")),
+        // the row's text block as a disclosure: what a pointer, a keyboard and a
+        // screen reader each get at it through
+        disclosure: main
+          ? { tag: main.tagName, type: main.type,
+              expanded: main.getAttribute("aria-expanded"),
+              tooltip: main.getAttribute("title") }
+          : null,
+      };
+    });
+
 const ch = byId.get("bb-charted") || new Node("div");
-const charted = ch.children
-  .filter((r) => r.className.split(/\s+/).includes("bb-row"))
-  .map((row) => {
-    const main = row.children.find((c) => c.className.includes("bb-row__main"));
-    return {
-      title: main?.children.find((c) => c.className.includes("bb-row__title"))?.textContent ?? "",
-      sub: main?.children.find((c) => c.className.includes("bb-row__sub"))?.textContent ?? "",
-      badges: badgesOf(row),
-      pickable: row.children.some((c) => c.className.includes("bb-pick") && !c.className.includes("spacer")),
-    };
-  });
+const charted = rowsOf("bb-charted");
+const underway = rowsOf("bb-underway");
+const landed = rowsOf("bb-landed");
 // A fail-closed render replaces the page body instead of the board sections, so
 // surface it rather than reporting an empty board as a successful render.
 const errorText = [...byId.entries()]
@@ -114,4 +133,5 @@ const errorText = [...byId.entries()]
 const empty = ch.children.filter((c) => c.className.includes("bb-empty")).map((c) => c.textContent);
 const more = ch.children.filter((c) => c.className.includes("bb-morechip")).map((c) => c.textContent);
 
-process.stdout.write(JSON.stringify({ stats, charted, empty, more, error: errorText }) + "\n");
+process.stdout.write(
+  JSON.stringify({ stats, charted, underway, landed, empty, more, error: errorText }) + "\n");

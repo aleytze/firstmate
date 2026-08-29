@@ -41,6 +41,18 @@ render() {  # <home> <charted-json> [charted_more] [charted_warning_more]
     || fail "the built board could not be rendered"
 }
 
+# Build the board from a whole payload, for assertions that span every section.
+render_payload() {  # <home> <payload-json>
+  local home=$1 data="$1/payload.json"
+  printf '%s' "$2" > "$data"
+  PATH="$home/fakebin:$PATH" FM_HOME="$home" \
+    FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
+    FM_PROCEVENT_CLAIM_ROOT="$home/procevent-claims" \
+    "$BOARD" build "$data" >/dev/null || fail "the board did not build"
+  node "$HARNESS" "$home/.lavish/bearings-board.html" \
+    || fail "the built board could not be rendered"
+}
+
 charted_next_count() {  # <render-json>
   printf '%s' "$1" | jq -r '.stats[] | select(.label == "charted next") | .n'
 }
@@ -128,8 +140,58 @@ test_an_omitted_kind_keeps_the_existing_queued_rendering() {
   pass "an omitted kind renders exactly as queued work always did"
 }
 
+
+# The captain could not read a row's title or its waiting reason because both
+# were clipped to one line. What makes the rest reachable is that the row's text
+# block is one real button carrying the complete strings: a pointer gets the
+# tooltip, a keyboard gets the button, a screen reader gets the whole text, and
+# a press opens the row in place. The clamp itself is CSS, so a browser - not
+# this shim - is where the visual truncation is checked.
+LONG_TITLE="Rework the charted next column so that the reason a task is waiting survives the half-width layout it is rendered into"
+LONG_REASON="waiting on the upstream release that carries the presentation-space version floor, because dispatching before it lands would strand the lab"
+
+long_payload() {
+  jq -n --arg t "$LONG_TITLE" --arg r "$LONG_REASON" '{
+    schema:"fm-bearings-board.v1", home:"disclosure-home", generated:"2026-08-26T00:00Z",
+    prs_live:false, captains_call:[],
+    underway:[{id:"u1", repo:"sample", state:"working", kind:"ship", doing:$t}],
+    landed:[{id:"l1", repo:"sample", what:$t, owner:"crew"}],
+    charted:[{id:"c1", repo:"sample", title:$t, reason:$r, dispatchable:true}]}'
+}
+
+test_every_compact_row_reaches_its_full_text_through_one_disclosure() {
+  local home out
+  home=$(make_home disclosure)
+  out=$(render_payload "$home" "$(long_payload)")
+  printf '%s' "$out" | jq -e '.error == ""' >/dev/null \
+    || fail "the board rendered its fail-closed error instead of the fleet: $out"
+  printf '%s' "$out" | jq -e --arg t "$LONG_TITLE" '
+    [.underway[0], .landed[0], .charted[0]] | all(
+      .disclosure.tag == "button" and .disclosure.type == "button"
+        and .disclosure.expanded == "false"
+        and .title == $t
+        and (.disclosure.tooltip | contains($t))
+        and (.sub as $s | .disclosure.tooltip | contains($s)))
+  ' >/dev/null || fail "a section's rows are not a disclosure carrying their full text: $out"
+  pass "underway, landed and charted rows each expose their full text through one disclosure button"
+}
+
+test_the_charted_reason_survives_the_row_in_full() {
+  local home out
+  home=$(make_home disclosure-reason)
+  out=$(render_payload "$home" "$(long_payload)")
+  printf '%s' "$out" | jq -e --arg r "$LONG_REASON" '
+    .charted[0]
+      | (.sub | startswith($r)) and (.sub | endswith("\u00b7 sample"))
+        and (.disclosure.tooltip | contains($r))
+  ' >/dev/null || fail "the waiting reason did not survive the charted row in full: $out"
+  pass "the charted waiting reason is carried whole by the row and its tooltip"
+}
+
 test_a_warning_row_reads_as_a_repair_not_as_queued_work
 test_warnings_are_excluded_from_the_charted_next_count
 test_a_board_of_only_warnings_still_reports_nothing_queued
 test_omitted_warnings_never_count_as_more_queued
 test_an_omitted_kind_keeps_the_existing_queued_rendering
+test_every_compact_row_reaches_its_full_text_through_one_disclosure
+test_the_charted_reason_survives_the_row_in_full

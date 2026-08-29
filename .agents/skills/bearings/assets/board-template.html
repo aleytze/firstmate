@@ -239,11 +239,11 @@ a { color: inherit; text-decoration: none; }
    Next, whose second line is "<reason> · <repo>", so the reason a task is
    waiting was the first thing an ellipsis ate. Two changes fix that without
    spending the density these rows exist for: the collapsed row clamps to two
-   wrapped lines instead of one truncated one, and the whole text block is a
-   real disclosure button that opens the rest in place. One button serves
-   pointer, touch, and keyboard alike; a native tooltip carries the same text
-   for a mouse hover; and a screen reader reads the full untruncated string
-   either way, because the clamp is only visual. */
+   wrapped lines instead of one truncated one, and a chevron button beside the
+   text opens the rest in place. One button serves pointer, touch, and keyboard
+   alike; a native tooltip on the text carries the same string for a mouse
+   hover; and a screen reader reads the full untruncated string either way,
+   because the clamp is only visual. */
 .bb-rows { display: flex; flex-direction: column; }
 .bb-row {
   display: flex; align-items: center; gap: 12px; padding: 11px 18px;
@@ -254,23 +254,15 @@ a { color: inherit; text-decoration: none; }
    rather than floating at the middle of the expanded block */
 .bb-row.is-open { align-items: flex-start; }
 
-/* The text block: a bare button laid out as a grid so the title, the sub line,
-   and the chevron stay siblings and the text column can shrink to zero. */
+/* The text block stays a plain, selectable div - laid out as a grid so the
+   title, the sub line, and the chevron stay siblings and the text column can
+   shrink to zero. The disclosure is the chevron beside the text, not the text
+   itself, so a drag across a row still selects and copies it. */
 .bb-row__main {
   min-width: 0; flex: 1 1 auto;
   display: grid; grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas: "title more" "sub more";
-  column-gap: 10px; align-items: start;
-  margin: 0; padding: 0; border: 0; background: none; color: inherit;
-  font: inherit; text-align: left; -webkit-appearance: none; appearance: none;
-  border-radius: var(--radius-sm); cursor: pointer;
-}
-.bb-row__main:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-/* a row with nothing hidden is not a disclosure: it leaves the tab order and
-   drops its affordance rather than offering an expand that reveals nothing */
-.bb-row__main:disabled { cursor: default; }
-.bb-row__main:not(:disabled):hover .bb-row__title {
-  text-decoration: underline; text-decoration-color: var(--ink-300); text-underline-offset: 2px;
+  align-items: start;
 }
 .bb-row__title, .bb-row__sub {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
@@ -281,15 +273,34 @@ a { color: inherit; text-decoration: none; }
 .bb-row.is-open .bb-row__title, .bb-row.is-open .bb-row__sub {
   display: block; -webkit-line-clamp: none; line-clamp: none; overflow: visible;
 }
+/* The chevron is a 44px touch target wrapping a 22px chip, rather than a small
+   button with a hit area that spills past it: an overlay that reached for the
+   same 44px would overflow its own column, and no nesting level here is allowed
+   to overflow. The button carries no box of its own, so the chip is what is
+   seen; the negative vertical margins keep the taller target from growing every
+   row, and the column needs no gap because the target already supplies one. */
 .bb-row__more {
-  grid-area: more; align-self: center; display: inline-grid; place-items: center;
-  width: 22px; height: 22px; flex: none; color: var(--text-faint);
+  grid-area: more; align-self: center;
+  display: inline-grid; place-items: center;
+  width: 44px; height: 44px; margin: -11px 0; flex: none; padding: 0;
+  color: var(--text-faint); background: none; border: 0; cursor: pointer;
+  -webkit-appearance: none; appearance: none;
+}
+.bb-row__more-chip {
+  display: grid; place-items: center; width: 22px; height: 22px;
   background: var(--surface-card-warm); border: 1px solid var(--border-soft);
-  border-radius: var(--radius-xs); transition: transform 120ms, color 120ms, border-color 120ms;
+  border-radius: var(--radius-xs);
+  transition: transform 120ms, color 120ms, border-color 120ms, box-shadow 120ms;
 }
 .bb-row__more svg { width: 13px; height: 13px; }
-.bb-row__main:not(:disabled):hover .bb-row__more { color: var(--text-body); border-color: var(--ink-300); }
-.bb-row.is-open .bb-row__more { transform: rotate(180deg); }
+.bb-row__more:not(:disabled):hover { color: var(--text-body); }
+.bb-row__more:not(:disabled):hover .bb-row__more-chip { border-color: var(--ink-300); }
+.bb-row__more:focus-visible { outline: none; }
+.bb-row__more:focus-visible .bb-row__more-chip { box-shadow: var(--focus-ring); }
+/* a row with nothing hidden is not a disclosure: it leaves the tab order and
+   drops its affordance rather than offering an expand that reveals nothing */
+.bb-row__more:disabled { cursor: default; }
+.bb-row.is-open .bb-row__more-chip { transform: rotate(180deg); }
 /* Before the clip measurement runs - and anywhere it cannot - every row keeps
    its affordance, so the text is never unreachable. Once measured, only rows
    that actually hide something advertise it. */
@@ -495,31 +506,38 @@ __FM_BEARINGS_BOARD_DATA__
   var CHEVRON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
 
   /* One text block for every compact row in Underway, Recently Landed and
-     Charted Next. The button carries the complete title and sub line as its own
-     text, so nothing is shortened in the DOM: the two-line clamp is CSS only,
-     the tooltip repeats it for a mouse, and pressing the button opens the row
-     in place for touch and keyboard. */
+     Charted Next. The text stays ordinary selectable text carrying the complete
+     title and sub line, so nothing is shortened in the DOM: the two-line clamp
+     is CSS only, the tooltip repeats it for a mouse, and the chevron button
+     beside it opens the row for touch and keyboard. */
   var discloseRows = [];
   function addRowText(row, titleText, subText) {
-    var main = el("button", "bb-row__main");
-    main.type = "button";
-    main.setAttribute("aria-expanded", "false");
+    var main = el("div", "bb-row__main");
     var full = subText ? titleText + "\n" + subText : titleText;
     main.setAttribute("title", full);
     var title = el("span", "bb-row__title", titleText);
     var sub = el("span", "bb-row__sub", subText);
-    var chevron = el("span", "bb-row__more");
-    chevron.innerHTML = CHEVRON_SVG;
+    var more = el("button", "bb-row__more");
+    more.type = "button";
+    more.setAttribute("aria-expanded", "false");
+    /* the chevron carries no text of its own, so it names the row it opens */
+    more.setAttribute("aria-label", "Show the full text of " + titleText);
+    var chip = el("span", "bb-row__more-chip");
+    chip.innerHTML = CHEVRON_SVG;
+    more.appendChild(chip);
     main.appendChild(title);
     main.appendChild(sub);
-    main.appendChild(chevron);
-    main.addEventListener("click", function () {
+    main.appendChild(more);
+    more.addEventListener("click", function () {
       var open = !row.classList.contains("is-open");
       row.classList.toggle("is-open", open);
-      main.setAttribute("aria-expanded", open ? "true" : "false");
+      more.setAttribute("aria-expanded", open ? "true" : "false");
+      /* opening a row changes every row's width the moment a scrollbar appears,
+         so what still clips is re-decided rather than left as it was measured */
+      requestMeasure();
     });
     row.appendChild(main);
-    discloseRows.push({ row: row, main: main, title: title, sub: sub, full: full });
+    discloseRows.push({ row: row, main: main, more: more, title: title, sub: sub, full: full });
     return main;
   }
 
@@ -527,18 +545,39 @@ __FM_BEARINGS_BOARD_DATA__
      can say which rows actually hide text, only those keep the affordance and
      stay in the tab order. Where it cannot, every row stays expandable, so the
      text is never unreachable. */
+  var measureEnabled = false;
+  var measureTimer;
   function measureClippedRows() {
     discloseRows.forEach(function (r) {
       if (r.row.classList.contains("is-open")) return;
       var clipped = r.title.scrollHeight - r.title.clientHeight > 1 ||
                     r.sub.scrollHeight - r.sub.clientHeight > 1;
       r.row.classList.toggle("bb-row--clip", clipped);
-      r.main.disabled = !clipped;
+      r.more.disabled = !clipped;
       /* the tooltip exists to recover clamped text, so a row that hides
          nothing drops it rather than repeating what is already on screen */
       if (clipped) r.main.setAttribute("title", r.full);
       else r.main.removeAttribute("title");
     });
+  }
+  /* Any later failure lands where the first one does: every row goes back to
+     being expandable and tooltipped, which is the state that hides nothing. */
+  function measureFailOpen() {
+    measureEnabled = false;
+    try {
+      document.body.classList.remove("bb-measured");
+      discloseRows.forEach(function (r) {
+        r.more.disabled = false;
+        r.main.setAttribute("title", r.full);
+      });
+    } catch (openError) { /* nothing further to fall back to */ }
+  }
+  function requestMeasure() {
+    if (!measureEnabled) return;
+    clearTimeout(measureTimer);
+    measureTimer = setTimeout(function () {
+      try { measureClippedRows(); } catch (measureError) { measureFailOpen(); }
+    }, 120);
   }
 
   document.getElementById("bb-provenance").textContent = data.schema + " · " + data.generated;
@@ -814,24 +853,32 @@ __FM_BEARINGS_BOARD_DATA__
 
   /* Measure once the rows are in the document but before the first paint, so a
      row never flashes an affordance it does not need, then again whenever the
-     widths or the metrics change: a late webfont and a resized window both move
-     where the text stops fitting. Failure here is not a board failure - every
-     row simply stays expandable. */
+     widths or the metrics change. A window resize is only one of those: a
+     scrollbar arriving as a row opens, or a text-only zoom, narrows the text
+     column without any resize event, and a late webfont moves where text stops
+     fitting at an unchanged width. So the row containers themselves are watched
+     for size, which is the thing the measurement actually depends on. Failure
+     here is not a board failure - every row simply stays expandable. */
   if (discloseRows.length && document.body && document.body.classList) {
     try {
       measureClippedRows();
+      measureEnabled = true;
       document.body.classList.add("bb-measured");
-      if (window.addEventListener) {
-        var measureTimer;
-        window.addEventListener("resize", function () {
-          clearTimeout(measureTimer);
-          measureTimer = setTimeout(measureClippedRows, 120);
+      if (window.addEventListener) window.addEventListener("resize", requestMeasure);
+      if (typeof window.ResizeObserver === "function") {
+        var rowsObserver = new window.ResizeObserver(requestMeasure);
+        var seenContainers = [];
+        discloseRows.forEach(function (r) {
+          var box = r.row.parentNode;
+          if (!box || seenContainers.indexOf(box) !== -1) return;
+          seenContainers.push(box);
+          rowsObserver.observe(box);
         });
       }
       if (document.fonts && document.fonts.ready && document.fonts.ready.then) {
-        document.fonts.ready.then(measureClippedRows, function () {});
+        document.fonts.ready.then(requestMeasure, function () {});
       }
-    } catch (measureError) { /* leave every row expandable */ }
+    } catch (measureError) { measureFailOpen(); }
   }
   } catch (e) {
     renderBoardError("The board data could not be rendered");

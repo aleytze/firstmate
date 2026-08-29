@@ -26,31 +26,33 @@ make_home() {  # <name>
   printf '%s\n' "$home"
 }
 
-# Build the board from <charted-json> and return what the renderer produced.
-render() {  # <home> <charted-json> [charted_more] [charted_warning_more]
-  local home=$1 charted=$2 more=${3:-0} warning_more=${4:-0} data="$1/payload.json"
-  jq -n --argjson charted "$charted" --argjson more "$more" --argjson warning_more "$warning_more" '{
-    schema:"fm-bearings-board.v1", home:"render-home", generated:"2026-08-26T00:00Z",
-    prs_live:false, captains_call:[], underway:[], landed:[],
-    charted:$charted, charted_more:$more, charted_warning_more:$warning_more}' > "$data"
+# Build the board from the payload already written to <home>/payload.json and
+# return what the renderer produced.
+build_and_render() {  # <home>
+  local home=$1
   PATH="$home/fakebin:$PATH" FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROCEVENT_CLAIM_ROOT="$home/procevent-claims" \
-    "$BOARD" build "$data" >/dev/null || fail "the board did not build"
+    "$BOARD" build "$home/payload.json" >/dev/null || fail "the board did not build"
   node "$HARNESS" "$home/.lavish/bearings-board.html" \
     || fail "the built board could not be rendered"
 }
 
+# Build the board from <charted-json> and return what the renderer produced.
+render() {  # <home> <charted-json> [charted_more] [charted_warning_more]
+  local home=$1 charted=$2 more=${3:-0} warning_more=${4:-0}
+  jq -n --argjson charted "$charted" --argjson more "$more" --argjson warning_more "$warning_more" '{
+    schema:"fm-bearings-board.v1", home:"render-home", generated:"2026-08-26T00:00Z",
+    prs_live:false, captains_call:[], underway:[], landed:[],
+    charted:$charted, charted_more:$more, charted_warning_more:$warning_more}' > "$home/payload.json"
+  build_and_render "$home"
+}
+
 # Build the board from a whole payload, for assertions that span every section.
 render_payload() {  # <home> <payload-json>
-  local home=$1 data="$1/payload.json"
-  printf '%s' "$2" > "$data"
-  PATH="$home/fakebin:$PATH" FM_HOME="$home" \
-    FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
-    FM_PROCEVENT_CLAIM_ROOT="$home/procevent-claims" \
-    "$BOARD" build "$data" >/dev/null || fail "the board did not build"
-  node "$HARNESS" "$home/.lavish/bearings-board.html" \
-    || fail "the built board could not be rendered"
+  local home=$1
+  printf '%s' "$2" > "$home/payload.json"
+  build_and_render "$home"
 }
 
 charted_next_count() {  # <render-json>
@@ -142,11 +144,11 @@ test_an_omitted_kind_keeps_the_existing_queued_rendering() {
 
 
 # The captain could not read a row's title or its waiting reason because both
-# were clipped to one line. What makes the rest reachable is that the row's text
-# block is one real button carrying the complete strings: a pointer gets the
-# tooltip, a keyboard gets the button, a screen reader gets the whole text, and
-# a press opens the row in place. The clamp itself is CSS, so a browser - not
-# this shim - is where the visual truncation is checked.
+# were clipped to one line. What makes the rest reachable is that the row keeps
+# the complete strings as ordinary selectable text carrying a tooltip for a
+# mouse, and puts a chevron button beside them that a keyboard and a touch tap
+# can press to open the row in place. The clamp itself is CSS, so a browser -
+# not this shim - is where the visual truncation is checked.
 LONG_TITLE="Rework the charted next column so that the reason a task is waiting survives the half-width layout it is rendered into"
 LONG_REASON="waiting on the upstream release that carries the presentation-space version floor, because dispatching before it lands would strand the lab"
 
@@ -167,13 +169,27 @@ test_every_compact_row_reaches_its_full_text_through_one_disclosure() {
     || fail "the board rendered its fail-closed error instead of the fleet: $out"
   printf '%s' "$out" | jq -e --arg t "$LONG_TITLE" '
     [.underway[0], .landed[0], .charted[0]] | all(
-      .disclosure.tag == "button" and .disclosure.type == "button"
+      .textTag == "div"
+        and .disclosure.tag == "button" and .disclosure.type == "button"
         and .disclosure.expanded == "false"
+        and (.disclosure.label | contains($t))
         and .title == $t
-        and (.disclosure.tooltip | contains($t))
-        and (.sub as $s | .disclosure.tooltip | contains($s)))
+        and (.tooltip | contains($t))
+        and (.sub as $s | .tooltip | contains($s)))
   ' >/dev/null || fail "a section's rows are not a disclosure carrying their full text: $out"
   pass "underway, landed and charted rows each expose their full text through one disclosure button"
+}
+
+# A row that renders a chevron but never opens leaves the clamped text just as
+# unreachable as before the fix, so the press itself is exercised.
+test_pressing_the_disclosure_opens_and_closes_the_row() {
+  local home out
+  home=$(make_home disclosure-toggle)
+  out=$(render_payload "$home" "$(long_payload)")
+  printf '%s' "$out" | jq -e '
+    .presses == [{open:true, expanded:"true"}, {open:false, expanded:"false"}]
+  ' >/dev/null || fail "pressing the disclosure did not open and then close the row: $out"
+  pass "pressing a row's disclosure opens it, and pressing again closes it"
 }
 
 test_the_charted_reason_survives_the_row_in_full() {
@@ -183,7 +199,7 @@ test_the_charted_reason_survives_the_row_in_full() {
   printf '%s' "$out" | jq -e --arg r "$LONG_REASON" '
     .charted[0]
       | (.sub | startswith($r)) and (.sub | endswith("\u00b7 sample"))
-        and (.disclosure.tooltip | contains($r))
+        and (.tooltip | contains($r))
   ' >/dev/null || fail "the waiting reason did not survive the charted row in full: $out"
   pass "the charted waiting reason is carried whole by the row and its tooltip"
 }
@@ -194,4 +210,5 @@ test_a_board_of_only_warnings_still_reports_nothing_queued
 test_omitted_warnings_never_count_as_more_queued
 test_an_omitted_kind_keeps_the_existing_queued_rendering
 test_every_compact_row_reaches_its_full_text_through_one_disclosure
+test_pressing_the_disclosure_opens_and_closes_the_row
 test_the_charted_reason_survives_the_row_in_full

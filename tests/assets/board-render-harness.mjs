@@ -5,11 +5,12 @@
 // Usage: node board-render-harness.mjs <built-board.html>
 // Prints one JSON document:
 //   { stats:[{n,label}],
-//     underway|landed|charted:[{title,sub,badges,pickable,disclosure}],
-//     empty, more, error }
+//     underway|landed|charted:[{title,sub,badges,pickable,tooltip,disclosure}],
+//     presses:[{open,expanded}], empty, more, error }
 // The shim has no layout, so it reports what the renderer builds unconditionally
 // and never what a real browser measures: the clamp and the clipped-row pass are
-// verified in a browser, not here.
+// verified in a browser, not here. Pressing the disclosure needs no layout, so
+// the shim does dispatch it and reports what the row became.
 import { readFileSync } from "node:fs";
 
 const html = readFileSync(process.argv[2], "utf8");
@@ -28,9 +29,18 @@ class Node {
     this.type = "";
     this.value = "";
     this.checked = false;
+    this.listeners = {};
     this.classList = {
-      add: (c) => { this.className = (this.className + " " + c).trim(); },
+      add: (c) => { if (!this.classList.contains(c)) this.className = (this.className + " " + c).trim(); },
+      remove: (c) => {
+        this.className = this.className.split(/\s+/).filter((x) => x && x !== c).join(" ");
+      },
       contains: (c) => this.className.split(/\s+/).includes(c),
+      toggle: (c, force) => {
+        const on = force === undefined ? !this.classList.contains(c) : !!force;
+        if (on) this.classList.add(c); else this.classList.remove(c);
+        return on;
+      },
     };
   }
   get textContent() {
@@ -42,7 +52,10 @@ class Node {
   appendChild(n) { n.parentNode = this; this.children.push(n); return n; }
   setAttribute(k, v) { this.attributes[k] = v; }
   getAttribute(k) { return Object.prototype.hasOwnProperty.call(this.attributes, k) ? this.attributes[k] : null; }
-  addEventListener() {}
+  removeAttribute(k) { delete this.attributes[k]; }
+  addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
+  // no event system, just the handlers this node registered for itself
+  dispatch(type) { for (const fn of this.listeners[type] || []) fn({ target: this }); }
   querySelectorAll(sel) {
     const want = sel.replace(/^\./, "").replace(/:checked$/, "");
     const checkedOnly = sel.endsWith(":checked");
@@ -100,30 +113,52 @@ const stats = strip.children.map((t) => ({
   label: t.children.find((c) => c.className.includes("bb-stat__label"))?.textContent,
 }));
 
-const rowsOf = (containerId) =>
+const rowNodesOf = (containerId) =>
   (byId.get(containerId) || new Node("div")).children
-    .filter((r) => r.className.split(/\s+/).includes("bb-row"))
-    .map((row) => {
-      const main = row.children.find((c) => c.className.includes("bb-row__main"));
-      return {
-        title: main?.children.find((c) => c.className.includes("bb-row__title"))?.textContent ?? "",
-        sub: main?.children.find((c) => c.className.includes("bb-row__sub"))?.textContent ?? "",
-        badges: badgesOf(row),
-        pickable: row.children.some((c) => c.className.includes("bb-pick") && !c.className.includes("spacer")),
-        // the row's text block as a disclosure: what a pointer, a keyboard and a
-        // screen reader each get at it through
-        disclosure: main
-          ? { tag: main.tagName, type: main.type,
-              expanded: main.getAttribute("aria-expanded"),
-              tooltip: main.getAttribute("title") }
-          : null,
-      };
-    });
+    .filter((r) => r.className.split(/\s+/).includes("bb-row"));
+
+const mainOf = (row) => row.children.find((c) => c.className.includes("bb-row__main"));
+const chevronOf = (row) => mainOf(row)?.children.find((c) => c.className.includes("bb-row__more"));
+
+const reportRow = (row) => {
+  const main = mainOf(row);
+  const more = chevronOf(row);
+  return {
+    title: main?.children.find((c) => c.className.includes("bb-row__title"))?.textContent ?? "",
+    sub: main?.children.find((c) => c.className.includes("bb-row__sub"))?.textContent ?? "",
+    badges: badgesOf(row),
+    pickable: row.children.some((c) => c.className.includes("bb-pick") && !c.className.includes("spacer")),
+    // the text block itself: plain, selectable, and carrying the whole string
+    // for a mouse hover
+    textTag: main?.tagName ?? null,
+    tooltip: main?.getAttribute("title") ?? null,
+    // the separate control a keyboard and a touch tap reach the rest through
+    disclosure: more
+      ? { tag: more.tagName, type: more.type,
+          expanded: more.getAttribute("aria-expanded"),
+          label: more.getAttribute("aria-label") }
+      : null,
+  };
+};
 
 const ch = byId.get("bb-charted") || new Node("div");
-const charted = rowsOf("bb-charted");
-const underway = rowsOf("bb-underway");
-const landed = rowsOf("bb-landed");
+const chartedNodes = rowNodesOf("bb-charted");
+const underwayNodes = rowNodesOf("bb-underway");
+const landedNodes = rowNodesOf("bb-landed");
+const charted = chartedNodes.map(reportRow);
+const underway = underwayNodes.map(reportRow);
+const landed = landedNodes.map(reportRow);
+
+// Opening a row needs no layout engine, so the shim presses the chevron twice
+// and reports what the row and the button became each time.
+const pressDisclosure = (row) => {
+  const more = chevronOf(row);
+  if (!more) return null;
+  more.dispatch("click");
+  return { open: row.classList.contains("is-open"), expanded: more.getAttribute("aria-expanded") };
+};
+const firstRow = chartedNodes[0] ?? underwayNodes[0] ?? landedNodes[0];
+const presses = firstRow ? [pressDisclosure(firstRow), pressDisclosure(firstRow)] : [];
 // A fail-closed render replaces the page body instead of the board sections, so
 // surface it rather than reporting an empty board as a successful render.
 const errorText = [...byId.entries()]
@@ -134,4 +169,4 @@ const empty = ch.children.filter((c) => c.className.includes("bb-empty")).map((c
 const more = ch.children.filter((c) => c.className.includes("bb-morechip")).map((c) => c.textContent);
 
 process.stdout.write(
-  JSON.stringify({ stats, charted, underway, landed, empty, more, error: errorText }) + "\n");
+  JSON.stringify({ stats, charted, underway, landed, presses, empty, more, error: errorText }) + "\n");

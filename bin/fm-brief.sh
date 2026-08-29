@@ -41,6 +41,13 @@
 # to launch a ship task whose explicit --mode disagrees, so an adjusted brief and the
 # recorded task metadata cannot drift apart.
 # Ship briefs begin with a worktree-isolation assertion before the branch step.
+# The two ship modes that open a PR (no-mistakes and direct-PR) also carry a short
+# "PR presentation" contract: the published title and body are read by the captain's
+# team, so the title leads with the project's work item id when it has one and the
+# body is written for human reviewers, never as agent instructions. local-only opens
+# no PR and omits it, as do the scout and secondmate scaffolds. It never relaxes the
+# no-mistakes --intent contract, which stays complete for the pipeline; that worker
+# corrects the opened PR instead.
 # --mode is refused on scout and secondmate scaffolds: a scout's deliverable is a
 # report rather than a merge, and a charter is not a delivery contract.
 # There is no --yolo flag here. The worker never owns merge decisions, so yolo is
@@ -378,6 +385,7 @@ fi
 case "$MODE" in
   direct-PR)
     SETUP2=""
+    PR_PRESENTATION_NOTE='You write the PR title and body yourself when you open it, so meet this contract in the first version.'
     RULE1='1. Never push to the default branch (push only your `fm/'"$ID"'` branch). Never merge a PR.'
     IFS= read -r -d '' DOD <<EOF || true
 # Definition of done
@@ -390,6 +398,7 @@ EOF
     ;;
   local-only)
     SETUP2=""
+    PR_PRESENTATION_NOTE=
     RULE1="1. Never push to any remote and never open a PR. Work only on your \`fm/$ID\` branch; firstmate handles the merge into local \`main\`."
     IFS= read -r -d '' DOD <<EOF || true
 # Definition of done
@@ -402,6 +411,8 @@ The configured merge authority approves the ready branch, then firstmate merges 
 EOF
     ;;
   *)  # no-mistakes
+    # shellcheck disable=SC2016  # single quotes are deliberate: the backticks are literal brief markup, not command substitution.
+    PR_PRESENTATION_NOTE='Your `--intent` still has to carry the full accepted requirement set for the pipeline, and the pipeline drafts the PR from it. That draft is not the deliverable: once the PR is open, and before you report it, rewrite its title and body with `gh-axi` to meet this contract.'
     SETUP2="
 2. Run \`no-mistakes doctor\`; if it reports the repo is not initialized here, run \`no-mistakes init\`."
     RULE1='1. Never push to the default branch. Never merge a PR.'
@@ -432,6 +443,26 @@ esac
 # $(...) command substitution used to strip. Drop that one newline so generated
 # briefs stay byte-identical to the historical Bash 5 output.
 DOD=${DOD%$'\n'}
+
+# One PR-presentation contract, shared by every ship mode that opens a PR. The
+# published title and body are the only part of this work the captain's team
+# reads, so they must be written for humans; a mode that opens no PR leaves
+# PR_PRESENTATION_NOTE empty and the whole section is omitted. This is a
+# contract about what reaches the PUBLISHED title and body only: it does not
+# relax the no-mistakes --intent requirement above.
+PR_PRESENTATION=
+if [ -n "$PR_PRESENTATION_NOTE" ]; then
+  IFS= read -r -d '' PR_PRESENTATION <<EOF || true
+# PR presentation - the title and body are published to the captain's team
+Write them for the humans who review this work, never as instructions to an agent.
+- **Title:** lead with the project's work item id where it uses one, then a conventional-commit subject: \`AB#1234 fix(parser): reject trailing separators\`. A trailing \`(AB#1234)\` is not acceptable - the id leads. With no work item, the conventional-commit subject alone is the whole title.
+- **Body:** what changed, why, what a reviewer should look at closely, and what is deliberately out of scope. Plain prose, with tables where they help.
+- **Never published:** an \`## Intent\` heading, a firstmate task id, agent-directed imperatives ("do not re-litigate", "do not re-derive", "ESTABLISHED"), brief scaffolding, or status-protocol boilerplate.
+
+$PR_PRESENTATION_NOTE
+
+EOF
+fi
 
 cat > "$BRIEF" <<EOF
 You are a crewmate: an autonomous worker agent managed by firstmate. Work on your own; do not wait for a human.
@@ -485,6 +516,6 @@ For anything the codebase already shows, prefer a pointer to the authoritative f
 If you touch a project \`AGENTS.md\` that lacks \`## Maintaining this file\`, add that short self-governance section from \`$FM_ROOT/bin/fm-ensure-agents-md.sh\` in the same pass.
 Keep it proportionate: skip \`AGENTS.md\` edits for trivial tasks that produced no durable project knowledge.
 
-$DOD
+$PR_PRESENTATION$DOD
 EOF
 echo "scaffolded: $BRIEF (ship, mode=$MODE; replace {TASK})"

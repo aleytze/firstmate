@@ -354,6 +354,89 @@ test_no_mistakes_dod_wording() {
   pass "fm-brief.sh: no-mistakes DOD keeps its apostrophe prose, now parse-safe"
 }
 
+# The published PR title and body are the only part of a shipped task the
+# captain's team reads, so every mode that opens a PR must carry the
+# presentation contract, and every scaffold that opens none must not. Two PRs
+# shipped with `## Intent`, a firstmate task id, and agent-directed imperatives
+# ("do not re-litigate", "ESTABLISHED") in their published body before this
+# contract existed. The contract governs the published PR only: the no-mistakes
+# --intent requirement must still be there in full beside it.
+test_pr_presentation_contract_covers_pr_producing_modes() {
+  local home id brief mode
+  home="$TMP_ROOT/pr-presentation-home"
+  mkdir -p "$home/data"
+
+  for mode in no-mistakes direct-PR; do
+    id="brief-pr-presentation-$mode"
+    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj --mode "$mode" >/dev/null 2>&1 \
+      || fail "$mode: brief did not scaffold"
+    brief="$home/data/$id/brief.md"
+    assert_grep "# PR presentation - the title and body are published to the captain's team" "$brief" \
+      "$mode: brief lost the PR presentation section"
+    assert_grep "Write them for the humans who review this work, never as instructions to an agent." "$brief" \
+      "$mode: PR presentation lost its human-audience contract"
+    # shellcheck disable=SC2016  # single quotes are deliberate: the backticks must stay literal
+    assert_grep '`AB#1234 fix(parser): reject trailing separators`' "$brief" \
+      "$mode: PR presentation lost the leading-work-item title example"
+    # shellcheck disable=SC2016  # single quotes are deliberate: the backticks must stay literal
+    assert_grep 'A trailing `(AB#1234)` is not acceptable - the id leads.' "$brief" \
+      "$mode: PR presentation did not rule out a trailing work item id"
+    assert_grep "With no work item, the conventional-commit subject alone is the whole title." "$brief" \
+      "$mode: PR presentation did not cover a project without work items"
+    assert_grep "what changed, why, what a reviewer should look at closely, and what is deliberately out of scope" "$brief" \
+      "$mode: PR presentation lost the human-facing body contract"
+    # shellcheck disable=SC2016  # single quotes are deliberate: the backticks must stay literal
+    assert_grep 'an `## Intent` heading, a firstmate task id, agent-directed imperatives' "$brief" \
+      "$mode: PR presentation lost the never-published list that the shipped PRs violated"
+    assert_grep '"do not re-litigate", "do not re-derive", "ESTABLISHED"' "$brief" \
+      "$mode: PR presentation lost the agent-directed imperatives it must exclude"
+  done
+
+  # no-mistakes: the pipeline drafts the PR from --intent, so the worker owns
+  # correcting the opened PR, and the --intent contract itself is unweakened.
+  brief="$home/data/brief-pr-presentation-no-mistakes/brief.md"
+  assert_grep "once the PR is open, and before you report it, rewrite its title and body with \`gh-axi\` to meet this contract" "$brief" \
+    "no-mistakes brief did not put PR correction on the worker after the pipeline opens it"
+  assert_grep "still has to carry the full accepted requirement set for the pipeline" "$brief" \
+    "no-mistakes brief did not keep --intent complete for the pipeline"
+  assert_grep "make \`--intent\` preserve all relevant content from this brief" "$brief" \
+    "PR presentation contract weakened the no-mistakes --intent requirement"
+
+  # direct-PR: the worker authors the published title and body directly.
+  assert_grep "You write the PR title and body yourself when you open it" \
+    "$home/data/brief-pr-presentation-direct-PR/brief.md" \
+    "direct-PR brief did not put first-version authorship on the worker"
+
+  pass "fm-brief.sh: PR-producing ship modes carry the human-facing PR presentation contract"
+}
+
+# A scaffold that never opens a PR must not carry the contract: local-only stops
+# at a ready branch, a scout delivers a report, and a charter is not a delivery
+# contract at all. Carrying it there would be dead instruction text.
+test_pr_presentation_contract_is_absent_without_a_pr() {
+  local home id brief label args
+  home="$TMP_ROOT/pr-presentation-absent-home"
+  mkdir -p "$home/data"
+  while IFS='|' read -r label id args; do
+    [ -n "$label" ] || continue
+    # shellcheck disable=SC2086  # args is an intentional word-split arg list
+    FM_SECONDMATE_CHARTER='Supervise the sample domain.' FM_HOME="$home" \
+      "$ROOT/bin/fm-brief.sh" "$id" $args >/dev/null 2>&1 \
+      || fail "$label: brief did not scaffold"
+    brief="$home/data/$id/brief.md"
+    assert_present "$brief" "$label: brief was not written"
+    assert_no_grep "# PR presentation" "$brief" \
+      "$label: scaffold that opens no PR carries the PR presentation contract"
+    assert_no_grep "AB#" "$brief" \
+      "$label: scaffold that opens no PR carries the PR title format"
+  done <<'ROWS'
+local-only ship|brief-no-pr-local|some-proj --mode local-only
+scout|brief-no-pr-scout|some-proj --scout
+secondmate charter|brief-no-pr-charter|--secondmate --no-projects
+ROWS
+  pass "fm-brief.sh: scaffolds that open no PR omit the PR presentation contract"
+}
+
 test_ship_project_memory_wording() {
   local home id brief
   home="$TMP_ROOT/project-memory-home"
@@ -761,6 +844,8 @@ test_delivery_flags_are_refused_where_they_do_not_apply
 test_faster_paths_use_configured_authority_without_stacked_review
 test_no_mistakes_dod_wording
 test_ship_project_memory_wording
+test_pr_presentation_contract_covers_pr_producing_modes
+test_pr_presentation_contract_is_absent_without_a_pr
 test_herdr_lab_contract_is_explicit_and_complete
 test_herdr_lab_contract_quotes_foreign_firstmate_path
 test_herdr_lab_omission_is_loud_for_ship_and_scout

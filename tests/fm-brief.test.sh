@@ -406,13 +406,15 @@ test_pr_presentation_contract_covers_pr_producing_modes() {
     "$brief" \
     "no-mistakes brief did not require the pipeline-inserted PR body content to be preserved"
   # Preserving that content is unreachable without the mechanics: `gh-axi pr
-  # view` truncates by default and `gh-axi pr edit` writes the whole body, so a
-  # careful worker on the default read still deletes the proof it must keep.
-  assert_grep "Read the current body with \`gh-axi pr view <n> --full\` before you edit" "$brief" \
-    "no-mistakes brief did not name the untruncated PR body read"
-  assert_grep "the default view truncates it and \`gh-axi pr edit\` writes the whole body, so anything you do not read back is deleted" \
+  # view` truncates by default and escape-encodes the body onto one line, and
+  # `gh-axi pr edit` writes the whole body, so a careful worker on the obvious
+  # commands still destroys or unrenders the proof it must keep.
+  assert_grep "Read the current body first with \`gh-axi pr view <n> --full\` (the default view truncates, and its output escapes newlines - decode them)" \
     "$brief" \
-    "no-mistakes brief did not warn that the PR edit replaces the whole body"
+    "no-mistakes brief did not name the untruncated read and its escaped newlines"
+  assert_grep "write the whole result back with \`gh-axi pr edit <n> --body-file\` rather than \`--body\`, because that edit replaces the entire body and anything you did not read back is deleted" \
+    "$brief" \
+    "no-mistakes brief did not name the --body-file write and the whole-body replacement"
   assert_grep "still has to carry the full accepted requirement set for the pipeline" "$brief" \
     "no-mistakes brief did not keep --intent complete for the pipeline"
   assert_grep "make \`--intent\` preserve all relevant content from this brief" "$brief" \

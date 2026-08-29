@@ -401,6 +401,11 @@ test_pr_presentation_contract_covers_pr_producing_modes() {
     "no-mistakes brief did not keep --intent complete for the pipeline"
   assert_grep "make \`--intent\` preserve all relevant content from this brief" "$brief" \
     "PR presentation contract weakened the no-mistakes --intent requirement"
+  # The active-run restriction still forbids hand-edits and self-fixes, but must
+  # say plainly that it does not cover the PR title and body the worker owns.
+  assert_grep "Do not hand-edit, commit, or fix findings yourself while a run is active (the PR title and body above are the exception) - the pipeline applies every fix." \
+    "$brief" \
+    "no-mistakes DOD did not carve the PR title and body out of the active-run restriction"
 
   # direct-PR: the worker authors the published title and body directly.
   assert_grep "You write the PR title and body yourself when you open it" \

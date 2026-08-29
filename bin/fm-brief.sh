@@ -412,7 +412,9 @@ EOF
     ;;
   *)  # no-mistakes
     # shellcheck disable=SC2016  # single quotes are deliberate: the backticks are literal brief markup, not command substitution.
-    PR_PRESENTATION_NOTE='Your `--intent` still has to carry the full accepted requirement set for the pipeline, and the pipeline drafts the PR from it. That draft is not the deliverable: once the PR is open, and before you report it, rewrite its title and body with `gh-axi` to meet this contract.'
+    PR_PRESENTATION_NOTE='Your `--intent` still has to carry the full accepted requirement set for the pipeline, and the pipeline drafts the PR from it.
+That draft is not the deliverable: after CI is green, and before you report it, rewrite the title and the intent-derived prose with `gh-axi` to meet this contract.
+Never replace the body wholesale - everything the pipeline inserted (evidence sections, assertion counts, attestation blocks, validation footers) is proof for the reviewer that the work was checked, so keep it verbatim and rewrite only the narrative around it.'
     SETUP2="
 2. Run \`no-mistakes doctor\`; if it reports the repo is not initialized here, run \`no-mistakes init\`."
     RULE1='1. Never push to the default branch. Never merge a PR.'

@@ -395,8 +395,16 @@ test_pr_presentation_contract_covers_pr_producing_modes() {
   # no-mistakes: the pipeline drafts the PR from --intent, so the worker owns
   # correcting the opened PR, and the --intent contract itself is unweakened.
   brief="$home/data/brief-pr-presentation-no-mistakes/brief.md"
-  assert_grep "once the PR is open, and before you report it, rewrite its title and body with \`gh-axi\` to meet this contract" "$brief" \
-    "no-mistakes brief did not put PR correction on the worker after the pipeline opens it"
+  assert_grep "after CI is green, and before you report it, rewrite the title and the intent-derived prose with \`gh-axi\` to meet this contract" "$brief" \
+    "no-mistakes brief did not put PR correction on the worker in the after-CI-green window"
+  # A wholesale body replacement on a shipped PR destroyed the pipeline's
+  # evidence sections, assertion counts, and attestation block. The note must
+  # name that failure mode and require the inserted proof to survive verbatim.
+  assert_grep "Never replace the body wholesale" "$brief" \
+    "no-mistakes brief did not rule out a wholesale PR body replacement"
+  assert_grep "everything the pipeline inserted (evidence sections, assertion counts, attestation blocks, validation footers) is proof for the reviewer that the work was checked, so keep it verbatim and rewrite only the narrative around it" \
+    "$brief" \
+    "no-mistakes brief did not require the pipeline-inserted PR body content to be preserved"
   assert_grep "still has to carry the full accepted requirement set for the pipeline" "$brief" \
     "no-mistakes brief did not keep --intent complete for the pipeline"
   assert_grep "make \`--intent\` preserve all relevant content from this brief" "$brief" \

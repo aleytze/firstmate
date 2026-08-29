@@ -406,12 +406,14 @@ test_pr_presentation_contract_covers_pr_producing_modes() {
     "$brief" \
     "no-mistakes brief did not require the pipeline-inserted PR body content to be preserved"
   # Preserving that content is unreachable without the mechanics: `gh-axi pr
-  # view` truncates by default and escape-encodes the body onto one line, and
-  # `gh-axi pr edit` writes the whole body, so a careful worker on the obvious
-  # commands still destroys or unrenders the proof it must keep.
-  assert_grep "Read the current body first with \`gh-axi pr view <n> --full\` (the default view truncates, and its output escapes newlines - decode them)" \
+  # view` truncates by default and returns the body as one double-quoted string
+  # literal (newlines, quotes and backslashes all escaped), and `gh-axi pr edit`
+  # writes the whole body, so a careful worker on the obvious commands still
+  # destroys or unrenders the proof it must keep. A newline-only decode leaves
+  # the pipeline's attestation JSON republished as invalid JSON.
+  assert_grep "Read the current body first with \`gh-axi pr view <n> --full\` (the default view truncates, and it returns the body as one escaped string - unescape the newlines, quotes, and backslashes)" \
     "$brief" \
-    "no-mistakes brief did not name the untruncated read and its escaped newlines"
+    "no-mistakes brief did not name the untruncated read and the full escaped-string decode"
   assert_grep "write the whole result back with \`gh-axi pr edit <n> --body-file\` rather than \`--body\`, because that edit replaces the entire body and anything you did not read back is deleted" \
     "$brief" \
     "no-mistakes brief did not name the --body-file write and the whole-body replacement"

@@ -415,7 +415,7 @@ EOF
     PR_PRESENTATION_NOTE='Your `--intent` still has to carry the full accepted requirement set for the pipeline, and the pipeline drafts the PR from it.
 That draft is not the deliverable: after CI is green, and before you report it, rewrite the title and the intent-derived prose with `gh-axi` to meet this contract.
 Never replace the body wholesale - everything the pipeline inserted (evidence sections, assertion counts, attestation blocks, validation footers) is proof for the reviewer that the work was checked, so keep it verbatim and rewrite only the narrative around it.
-Read the current body first with `gh-axi pr view <n> --full` (the default view truncates, and its output escapes newlines - decode them), then write the whole result back with `gh-axi pr edit <n> --body-file` rather than `--body`, because that edit replaces the entire body and anything you did not read back is deleted.'
+Read the current body first with `gh-axi pr view <n> --full` (the default view truncates, and it returns the body as one escaped string - unescape the newlines, quotes, and backslashes), then write the whole result back with `gh-axi pr edit <n> --body-file` rather than `--body`, because that edit replaces the entire body and anything you did not read back is deleted.'
     SETUP2="
 2. Run \`no-mistakes doctor\`; if it reports the repo is not initialized here, run \`no-mistakes init\`."
     RULE1='1. Never push to the default branch. Never merge a PR.'

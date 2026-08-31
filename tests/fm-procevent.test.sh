@@ -1576,6 +1576,7 @@ pass "read keeps every annotation when the session-ending message is absent"
 # An element annotation that also carries a typed comment must surface both:
 # the element (selector / text) and the freeform `prompt`. The published poll
 # shape puts those on one CSV row; preferring `text` used to drop the comment.
+# Equality is not provenance: a captain can type the captured element text.
 cat > "$READ" <<'EOF'
 session:
   file: /review.html
@@ -1583,15 +1584,11 @@ session:
   session_ended: true
   ended_by: user
 prompts[1]{uid,prompt,selector,tag,text}:
-  "el-n1","are we able to tell which model id belongs to a subscription vs an api key? generally speaking we should favor subscription quota when it is a tie","section#n1 > div",div,"Deterministic tie-break for ambiguous model ids (N1)MY PICK"
+  "el-n1","Use subscription quota","section#n1 > div",div,"Use subscription quota"
 EOF
 out=$(read_out) || fail "read failed on an annotate-plus-comment capture"
-assert_contains "$out" $'\nprompt:\n' \
-  "a typed comment on an annotated element was not a field of its own"
-assert_contains "$out" "are we able to tell which model id belongs to a subscription vs an api key? generally speaking we should favor subscription quota when it is a tie" \
-  "a typed comment on an annotated element was dropped"
-assert_contains "$out" "| Deterministic tie-break for ambiguous model ids (N1)MY PICK" \
-  "the annotated element text was dropped when a comment was also present"
+assert_contains "$out" $'text:\n| Use subscription quota\nprompt:\n| Use subscription quota' \
+  "a typed comment identical to the element text was not presented as its own field"
 assert_contains "$out" "element_selector: section#n1 > div" \
   "the annotated element selector was dropped when a comment was also present"
 assert_contains "$out" "tag: div" "the annotated element tag was dropped when a comment was also present"
@@ -1620,9 +1617,7 @@ assert_contains "$out" "element_selector: section#call > p:nth-of-type(1)" \
 assert_contains "$out" "SESSION-ENDING MESSAGE: (none)" \
   "a pure annotation was treated as a session-ending message"
 assert_contains "$out" "ANNOTATIONS" "a pure annotation was not presented"
-assert_not_contains "$out" $'\nprompt:\n' \
-  "a pure annotation whose prompt repeats its text gained a duplicate field"
-pass "read still presents a pure annotation without duplicating its text"
+pass "read still presents a pure annotation"
 
 cat > "$READ" <<'EOF'
 session:

@@ -1610,7 +1610,7 @@ session:
   session_ended: true
   ended_by: user
 prompts[1]{uid,prompt,selector,tag,text}:
-  "el-a","","section#call > p:nth-of-type(1)",note,"Membership gold-only callout"
+  "el-a","Membership gold-only callout","section#call > p:nth-of-type(1)",note,"Membership gold-only callout"
 EOF
 out=$(read_out) || fail "read failed on a pure-annotation capture"
 assert_contains "$out" "| Membership gold-only callout" \
@@ -1621,8 +1621,27 @@ assert_contains "$out" "SESSION-ENDING MESSAGE: (none)" \
   "a pure annotation was treated as a session-ending message"
 assert_contains "$out" "ANNOTATIONS" "a pure annotation was not presented"
 assert_not_contains "$out" $'\nprompt:\n' \
-  "a pure annotation with no comment invented a prompt field"
-pass "read still presents a pure annotation with no comment"
+  "a pure annotation whose prompt repeats its text gained a duplicate field"
+pass "read still presents a pure annotation without duplicating its text"
+
+cat > "$READ" <<'EOF'
+session:
+  file: /review.html
+  status: feedback
+  session_ended: true
+  ended_by: user
+prompts[1]{uid,prompt,selector,tag,text}:
+  "el-choice","Context data: {\"question\":\"quota-source\",\"answer\":\"subscription\"}","section#quota > button",choice,"Subscription quota"
+EOF
+out=$(read_out) || fail "read failed on a choice capture"
+assert_contains "$out" "| Subscription quota" \
+  "a choice row no longer showed its element text"
+assert_contains "$out" "tag: choice" "a choice row lost its type"
+assert_not_contains "$out" "Context data:" \
+  "a choice row surfaced machine-generated context as a comment"
+assert_not_contains "$out" $'\nprompt:\n' \
+  "a choice row gained a freeform comment field"
+pass "read does not present choice context as a comment"
 
 cat > "$READ" <<'EOF'
 session:

@@ -22,11 +22,11 @@
 #            from per-element annotations. Declared and presented item counts,
 #            plus a completeness verdict, follow before all annotations so a
 #            partial read is obvious. Each annotation retains its element uid,
-#            selector, tag, and text. A freeform comment on the same item
-#            (`prompt`) is printed as its own field even when a selector is also
-#            present, so an annotate-and-comment capture cannot drop the typed
-#            words. Captain-supplied body lines are visibly prefixed so they
-#            cannot forge structural labels. Empty message and annotation
+#            selector, tag, and text. A distinct freeform comment on the same
+#            non-choice item (`prompt`) is printed as its own field even when a
+#            selector is present, so an annotate-and-comment capture cannot drop
+#            the typed words. Captain-supplied body lines are visibly prefixed so
+#            they cannot forge structural labels. Empty message and annotation
 #            sections are reported explicitly.
 # poll       The registered listener command `arm` publishes, not a command to
 #            run in a conversational turn. It runs the published blocking poll
@@ -477,8 +477,8 @@ cmd_answers() {
 # so a captain-supplied string cannot forge a section label. The session-ending
 # message is printed before the count line and before any annotation, because
 # that is the field a truncated grep of the raw capture historically dropped.
-# An annotation that also carries a freeform `prompt` prints that comment as
-# its own field; a selector must not hide the typed words.
+# An annotation that also carries a distinct freeform `prompt` prints that
+# comment as its own field; a selector must not hide the typed words.
 cmd_read() {
   local file=${1-} lifecycle session_ended
   [ -n "$file" ] || usage
@@ -597,7 +597,7 @@ cmd_read() {
         my $comment = defined $f->{prompt} ? $f->{prompt} : "";
         my $body = length $elem ? $elem : $comment;
         emit_body($body);
-        if (length $comment) {
+        if ($tag ne "choice" && length $comment && $comment ne $elem) {
           print "prompt:\n";
           emit_body($comment);
         }

@@ -477,8 +477,8 @@ cmd_answers() {
 # so a captain-supplied string cannot forge a section label. The session-ending
 # message is printed before the count line and before any annotation, because
 # that is the field a truncated grep of the raw capture historically dropped.
-# An annotation that also carries a distinct freeform `prompt` prints that
-# comment as its own field; a selector must not hide the typed words.
+# A non-choice annotation that also carries a distinct freeform `prompt` prints
+# that comment as its own field; a selector must not hide the typed words.
 cmd_read() {
   local file=${1-} lifecycle session_ended
   [ -n "$file" ] || usage

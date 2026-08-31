@@ -1576,7 +1576,6 @@ pass "read keeps every annotation when the session-ending message is absent"
 # An element annotation that also carries a typed comment must surface both:
 # the element (selector / text) and the freeform `prompt`. The published poll
 # shape puts those on one CSV row; preferring `text` used to drop the comment.
-# Equality is not provenance: a captain can type the captured element text.
 cat > "$READ" <<'EOF'
 session:
   file: /review.html
@@ -1584,11 +1583,11 @@ session:
   session_ended: true
   ended_by: user
 prompts[1]{uid,prompt,selector,tag,text}:
-  "el-n1","Use subscription quota","section#n1 > div",div,"Use subscription quota"
+  "el-n1","Use subscription quota","section#n1 > div",div,"Ambiguous model quota source"
 EOF
 out=$(read_out) || fail "read failed on an annotate-plus-comment capture"
-assert_contains "$out" $'text:\n| Use subscription quota\nprompt:\n| Use subscription quota' \
-  "a typed comment identical to the element text was not presented as its own field"
+assert_contains "$out" $'text:\n| Ambiguous model quota source\nprompt:\n| Use subscription quota' \
+  "a typed comment on the annotated element was not presented as its own field"
 assert_contains "$out" "element_selector: section#n1 > div" \
   "the annotated element selector was dropped when a comment was also present"
 assert_contains "$out" "tag: div" "the annotated element tag was dropped when a comment was also present"
@@ -1617,7 +1616,9 @@ assert_contains "$out" "element_selector: section#call > p:nth-of-type(1)" \
 assert_contains "$out" "SESSION-ENDING MESSAGE: (none)" \
   "a pure annotation was treated as a session-ending message"
 assert_contains "$out" "ANNOTATIONS" "a pure annotation was not presented"
-pass "read still presents a pure annotation"
+assert_not_contains "$out" $'\nprompt:\n' \
+  "a pure annotation whose prompt repeats its text gained a duplicate field"
+pass "read still presents a pure annotation without duplicating its text"
 
 cat > "$READ" <<'EOF'
 session:

@@ -22,7 +22,7 @@
 #            from per-element annotations. Declared and presented item counts,
 #            plus a completeness verdict, follow before all annotations so a
 #            partial read is obvious. Each annotation retains its element uid,
-#            selector, tag, and text. A freeform comment on the same non-choice
+#            selector, tag, and text. A freeform comment on the same element
 #            item (`prompt`) is printed as its own field even when a selector is
 #            present, so an annotate-and-comment capture cannot drop
 #            the typed words. Captain-supplied body lines are visibly prefixed so
@@ -477,9 +477,9 @@ cmd_answers() {
 # so a captain-supplied string cannot forge a section label. The session-ending
 # message is printed before the count line and before any annotation, because
 # that is the field a truncated grep of the raw capture historically dropped.
-# A non-choice annotation that also carries a freeform `prompt` prints that
-# comment as its own field; a selector must not hide the typed words. Prompt
-# provenance cannot be inferred by comparing it with the captured element text.
+# A comment-bearing element annotation prints its freeform `prompt` as its own
+# field; a selector must not hide the typed words. A prompt that merely repeats
+# captured element text is the annotation fallback, not a second comment.
 cmd_read() {
   local file=${1-} lifecycle session_ended
   [ -n "$file" ] || usage
@@ -598,7 +598,7 @@ cmd_read() {
         my $comment = defined $f->{prompt} ? $f->{prompt} : "";
         my $body = length $elem ? $elem : $comment;
         emit_body($body);
-        if ($tag ne "choice" && length $comment) {
+        if ($tag ne "choice" && length $comment && $comment ne $elem) {
           print "prompt:\n";
           emit_body($comment);
         }

@@ -4,14 +4,22 @@
 //
 // Usage: node board-render-harness.mjs <built-board.html>
 // Prints one JSON document:
-//   { stats:[{n,label}],
-//     underway|landed|charted:[{title,sub,badges,pickable,textTag,tooltip,textIds,disclosure}],
+//   { stats:[{n,label}], measured,
+//     underway|landed|charted:[{title,sub,badges,pickable,textTag,tooltip,textIds,clip,disclosure}],
 //     presses:[{open,expanded,tooltip}], empty, more, error }
-// The shim has no layout, so it reports what the renderer builds unconditionally
-// and never what a real browser measures: the clamp and the clipped-row pass are
-// verified in a browser, not here. Pressing the disclosure needs no layout, so
-// the shim does dispatch it and reports what the row became.
+// There is no layout engine here, so text is modeled as a monospace paragraph
+// wrapped at WRAP_COLS and clamped to CLAMP_LINES - the stylesheet's own
+// two-line clamp - which is enough for the renderer's clipped-row pass to run
+// and decide the same way it does in a browser. How wide a real glyph is stays
+// a browser question; that a row hiding text keeps its disclosure is decided
+// here. Setting FM_BOARD_HARNESS_MEASURE=off makes every measurement throw, to
+// stand for an environment where the pass cannot run at all.
 import { readFileSync } from "node:fs";
+
+const WRAP_COLS = 48;
+const CLAMP_LINES = 2;
+const LINE_PX = 20;
+const MEASURABLE = process.env.FM_BOARD_HARNESS_MEASURE !== "off";
 
 const html = readFileSync(process.argv[2], "utf8");
 
@@ -44,6 +52,20 @@ class Node {
       },
     };
   }
+  get _lines() {
+    if (!MEASURABLE) throw new Error("layout is unavailable");
+    return Math.max(1, Math.ceil(this.textContent.length / WRAP_COLS));
+  }
+  get scrollHeight() { return this._lines * LINE_PX; }
+  // clamped like the stylesheet, except inside a row the renderer has opened
+  get clientHeight() {
+    const lines = this._lines;
+    let clamp = true;
+    for (let n = this.parentNode; n; n = n.parentNode) {
+      if (n.classList.contains("is-open")) { clamp = false; break; }
+    }
+    return (clamp ? Math.min(lines, CLAMP_LINES) : lines) * LINE_PX;
+  }
   get textContent() {
     return this.children.length
       ? this.children.map((c) => c.textContent).join("")
@@ -56,7 +78,10 @@ class Node {
   removeAttribute(k) { delete this.attributes[k]; }
   addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
   // no event system, just the handlers this node registered for itself
-  dispatch(type) { for (const fn of this.listeners[type] || []) fn({ target: this }); }
+  dispatch(type) {
+    if (this.disabled) return;
+    for (const fn of this.listeners[type] || []) fn({ target: this });
+  }
   querySelectorAll(sel) {
     const want = sel.replace(/^\./, "").replace(/:checked$/, "");
     const checkedOnly = sel.endsWith(":checked");
@@ -79,7 +104,11 @@ dataNode.textContent = html
   .split("</script>")[0];
 byId.set("bearings-data", dataNode);
 
+const body = new Node("body");
 globalThis.document = {
+  // the clipped-row pass is gated on a body carrying a classList, and marks it
+  // once it has measured, so the shim supplies a real one
+  body,
   createElement: (tag) => new Node(tag),
   // Lazily mint any element the page asks for: the shim tracks whatever ids
   // the shipped template actually uses instead of pinning a fixed list.
@@ -138,12 +167,15 @@ const reportRow = (row) => {
     // the ids of the two spans the row actually expands, so a caller can check
     // what the button points at and that no two rows were given the same name
     textIds: [titleNode?.id ?? "", subNode?.id ?? ""],
+    // what the measurement pass concluded this row hides
+    clip: row.classList.contains("bb-row--clip"),
     // the separate control a keyboard and a touch tap reach the rest through
     disclosure: more
       ? { tag: more.tagName, type: more.type,
           expanded: more.getAttribute("aria-expanded"),
           label: more.getAttribute("aria-label"),
-          controls: more.getAttribute("aria-controls") }
+          controls: more.getAttribute("aria-controls"),
+          disabled: more.disabled }
       : null,
   };
 };
@@ -177,4 +209,5 @@ const empty = ch.children.filter((c) => c.className.includes("bb-empty")).map((c
 const more = ch.children.filter((c) => c.className.includes("bb-morechip")).map((c) => c.textContent);
 
 process.stdout.write(
-  JSON.stringify({ stats, charted, underway, landed, presses, empty, more, error: errorText }) + "\n");
+  JSON.stringify({ stats, measured: body.classList.contains("bb-measured"),
+    charted, underway, landed, presses, empty, more, error: errorText }) + "\n");

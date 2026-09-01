@@ -27,14 +27,15 @@ make_home() {  # <name>
 }
 
 # Build the board from the payload already written to <home>/payload.json and
-# return what the renderer produced.
-build_and_render() {  # <home>
-  local home=$1
+# return what the renderer produced. With measure=off the harness makes every
+# text measurement throw, standing for a browser where the pass cannot run.
+build_and_render() {  # <home> [measure]
+  local home=$1 measure=${2:-on}
   PATH="$home/fakebin:$PATH" FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROCEVENT_CLAIM_ROOT="$home/procevent-claims" \
     "$BOARD" build "$home/payload.json" >/dev/null || fail "the board did not build"
-  node "$HARNESS" "$home/.lavish/bearings-board.html" \
+  FM_BOARD_HARNESS_MEASURE="$measure" node "$HARNESS" "$home/.lavish/bearings-board.html" \
     || fail "the built board could not be rendered"
 }
 
@@ -49,10 +50,10 @@ render() {  # <home> <charted-json> [charted_more] [charted_warning_more]
 }
 
 # Build the board from a whole payload, for assertions that span every section.
-render_payload() {  # <home> <payload-json>
+render_payload() {  # <home> <payload-json> [measure]
   local home=$1
   printf '%s' "$2" > "$home/payload.json"
-  build_and_render "$home"
+  build_and_render "$home" "${3:-on}"
 }
 
 charted_next_count() {  # <render-json>
@@ -240,6 +241,48 @@ test_expanding_a_row_drops_its_now_redundant_tooltip() {
   pass "expanding a row drops its redundant tooltip, and collapsing restores it"
 }
 
+# An expand that reveals nothing is noise, so the measurement pass takes the
+# rows that fit back out of the tab order - but it must never take out a row
+# that really is hiding text, which is the bug this whole change repairs.
+mixed_payload() {
+  jq -n --arg t "$LONG_TITLE" --arg r "$LONG_REASON" '{
+    schema:"fm-bearings-board.v1", home:"clip-home", generated:"2026-08-26T00:00Z",
+    prs_live:false, captains_call:[], underway:[], landed:[],
+    charted:[{id:"c1", repo:"sample", title:$t, reason:$r, dispatchable:true},
+             {id:"c2", repo:"sample", title:"Short", reason:"gated", dispatchable:true}]}'
+}
+
+test_only_a_row_that_hides_text_keeps_its_disclosure() {
+  local home out
+  home=$(make_home clip-measure)
+  out=$(render_payload "$home" "$(mixed_payload)")
+  printf '%s' "$out" | jq -e '.measured == true' >/dev/null \
+    || fail "the board never measured which rows clip: $out"
+  printf '%s' "$out" | jq -e --arg t "$LONG_TITLE" '
+    (.charted[0] | .clip == true and .disclosure.disabled == false
+       and (.tooltip | contains($t)))
+      and (.charted[1] | .clip == false and .disclosure.disabled == true
+       and .tooltip == null)
+  ' >/dev/null || fail "the disclosure did not follow which rows actually hide text: $out"
+  pass "a row that hides text keeps an enabled disclosure, and a row that fits loses it"
+}
+
+# Where the pass cannot run there is no way to tell which rows hide text, so
+# every row must stay reachable rather than every row losing its way in.
+test_rows_stay_expandable_where_the_clip_measurement_cannot_run() {
+  local home out
+  home=$(make_home clip-fail-open)
+  out=$(render_payload "$home" "$(mixed_payload)" off)
+  printf '%s' "$out" | jq -e '.error == "" and .measured == false' >/dev/null \
+    || fail "an unmeasurable board did not fall back cleanly: $out"
+  printf '%s' "$out" | jq -e --arg t "$LONG_TITLE" '
+    (.charted | length) == 2
+      and all(.charted[]; .disclosure.disabled == false and .tooltip != null)
+      and (.charted[0].tooltip | contains($t))
+  ' >/dev/null || fail "an unmeasurable board took rows out of reach: $out"
+  pass "every row stays expandable and keeps its tooltip where the clip measurement cannot run"
+}
+
 test_the_charted_reason_survives_the_row_in_full() {
   local home out
   home=$(make_home disclosure-reason)
@@ -261,4 +304,6 @@ test_every_compact_row_reaches_its_full_text_through_one_disclosure
 test_each_disclosure_names_the_text_it_opens_with_a_page_unique_id
 test_pressing_the_disclosure_opens_and_closes_the_row
 test_expanding_a_row_drops_its_now_redundant_tooltip
+test_only_a_row_that_hides_text_keeps_its_disclosure
+test_rows_stay_expandable_where_the_clip_measurement_cannot_run
 test_the_charted_reason_survives_the_row_in_full

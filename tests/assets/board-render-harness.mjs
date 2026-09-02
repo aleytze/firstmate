@@ -12,14 +12,17 @@
 // two-line clamp - which is enough for the renderer's clipped-row pass to run
 // and decide the same way it does in a browser. How wide a real glyph is stays
 // a browser question; that a row hiding text keeps its disclosure is decided
-// here. Setting FM_BOARD_HARNESS_MEASURE=off makes every measurement throw, to
-// stand for an environment where the pass cannot run at all.
+// here. Setting FM_BOARD_HARNESS_MEASURE=off makes every measurement throw and
+// =zero makes every measurement read zero, the two shapes of an environment
+// where the pass cannot run at all.
 import { readFileSync } from "node:fs";
 
 const WRAP_COLS = 48;
 const CLAMP_LINES = 2;
 const LINE_PX = 20;
-const MEASURABLE = process.env.FM_BOARD_HARNESS_MEASURE !== "off";
+const MEASURE_MODE = process.env.FM_BOARD_HARNESS_MEASURE || "on";
+const MEASURABLE = MEASURE_MODE !== "off";
+const NO_LAYOUT = MEASURE_MODE === "zero";
 
 const html = readFileSync(process.argv[2], "utf8");
 
@@ -56,9 +59,10 @@ class Node {
     if (!MEASURABLE) throw new Error("layout is unavailable");
     return Math.max(1, Math.ceil(this.textContent.length / WRAP_COLS));
   }
-  get scrollHeight() { return this._lines * LINE_PX; }
+  get scrollHeight() { return NO_LAYOUT ? 0 : this._lines * LINE_PX; }
   // clamped like the stylesheet, except inside a row the renderer has opened
   get clientHeight() {
+    if (NO_LAYOUT) return 0;
     const lines = this._lines;
     let clamp = true;
     for (let n = this.parentNode; n; n = n.parentNode) {

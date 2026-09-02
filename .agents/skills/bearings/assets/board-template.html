@@ -543,13 +543,19 @@ __FM_BEARINGS_BOARD_DATA__
 
   var measureEnabled = false;
   var measureTimer;
+  /* An element with no layout reads zero or undefined for both metrics, which
+     is not evidence that it fits, so it fails open with the throwing shape. */
+  function hidesText(e) {
+    var box = e.clientHeight, full = e.scrollHeight;
+    if (!(box > 0) || !(full > 0)) throw new Error("the row cannot be measured");
+    return full - box > 1;
+  }
   function measureClippedRows() {
     /* every read first, so one layout serves the whole pass rather than each
        row's writes forcing the next row's measurement to reflow */
     var clipped = discloseRows.map(function (r) {
       if (r.row.classList.contains("is-open")) return null;
-      return r.title.scrollHeight - r.title.clientHeight > 1 ||
-             r.sub.scrollHeight - r.sub.clientHeight > 1;
+      return hidesText(r.title) || hidesText(r.sub);
     });
     discloseRows.forEach(function (r, i) {
       if (clipped[i] !== null) {

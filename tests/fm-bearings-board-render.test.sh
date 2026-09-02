@@ -27,8 +27,9 @@ make_home() {  # <name>
 }
 
 # Build the board from the payload already written to <home>/payload.json and
-# return what the renderer produced. With measure=off the harness makes every
-# text measurement throw, standing for a browser where the pass cannot run.
+# return what the renderer produced. With measure=off every text measurement
+# throws and with measure=zero every one reads zero, the two shapes of a
+# browser where the pass cannot run.
 build_and_render() {  # <home> [measure]
   local home=$1 measure=${2:-on}
   PATH="$home/fakebin:$PATH" FM_HOME="$home" \
@@ -283,6 +284,22 @@ test_rows_stay_expandable_where_the_clip_measurement_cannot_run() {
   pass "every row stays expandable and keeps its tooltip where the clip measurement cannot run"
 }
 
+# Zero is the other shape of an absent layout engine, and reading it as "this
+# row fits" would strip every disclosure and tooltip the fix exists to keep.
+test_rows_stay_expandable_where_layout_metrics_read_zero() {
+  local home out
+  home=$(make_home clip-zero-metrics)
+  out=$(render_payload "$home" "$(mixed_payload)" zero)
+  printf '%s' "$out" | jq -e '.error == "" and .measured == false' >/dev/null \
+    || fail "a board whose layout metrics read zero did not fall back cleanly: $out"
+  printf '%s' "$out" | jq -e --arg t "$LONG_TITLE" '
+    (.charted | length) == 2
+      and all(.charted[]; .disclosure.disabled == false and .tooltip != null)
+      and (.charted[0].tooltip | contains($t))
+  ' >/dev/null || fail "a board whose layout metrics read zero took rows out of reach: $out"
+  pass "every row stays expandable and keeps its tooltip where layout metrics read zero"
+}
+
 test_the_charted_reason_survives_the_row_in_full() {
   local home out
   home=$(make_home disclosure-reason)
@@ -306,4 +323,5 @@ test_pressing_the_disclosure_opens_and_closes_the_row
 test_expanding_a_row_drops_its_now_redundant_tooltip
 test_only_a_row_that_hides_text_keeps_its_disclosure
 test_rows_stay_expandable_where_the_clip_measurement_cannot_run
+test_rows_stay_expandable_where_layout_metrics_read_zero
 test_the_charted_reason_survives_the_row_in_full

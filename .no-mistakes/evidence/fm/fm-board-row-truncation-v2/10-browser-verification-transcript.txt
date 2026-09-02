@@ -1,0 +1,75 @@
+  wrote 02-before-charted-next-1280.png
+BEFORE (pre-change template) - Charted Next sub lines:
+  hidden horizontally: 745px, row height 59px | waiting on the upstream presentation-space release that carr...
+  hidden horizontally: 0px, row height 60px | firstmate...
+  hidden horizontally: 0px, row height 60px | needs a repair pass before it can be dispatched at all · fir...
+  wrote 04-after-charted-next-collapsed.png
+
+AFTER (this branch) at 1280 - every compact row:
+  [bb-charted] clip=true chevron=grid disabled=false hit=44x44 tooltip=yes hiddenPx=35 h=96px | Rework the charted next column so the re
+  [bb-charted] clip=false chevron=none disabled=true hit=0x0 tooltip=none hiddenPx=0 h=60px | Handle oversized snapshot inputs
+  [bb-charted] clip=true chevron=grid disabled=false hit=44x44 tooltip=yes hiddenPx=20 h=97px | Reconcile the stale process-event claim 
+  [bb-underway] clip=false chevron=none disabled=true hit=0x0 tooltip=none hiddenPx=1 h=79px | Rework the charted next column so the re
+  [bb-underway] clip=false chevron=none disabled=true hit=0x0 tooltip=none hiddenPx=0 h=60px | Short underway row
+  [bb-landed] clip=false chevron=none disabled=true hit=0x0 tooltip=none hiddenPx=1 h=79px | Settle the watcher delivery on the Pi ac
+  [bb-landed] clip=false chevron=none disabled=true hit=0x0 tooltip=none hiddenPx=0 h=60px | Trim board comments
+
+Charted Next row still hiding text after the two-line clamp: index 0
+  wrote 05-after-charted-next-expanded-by-click.png
+  clicked the chevron: hidden pixels 35 -> 1, tooltip yes -> none
+  chevron position across the toggle: 1051,215 -> 1051,215 (hit area 44x44)
+  aria-expanded now: true
+  full reason now on screen: "waiting on the upstream presentation-space release that carries the version floo"...
+  clicked again: hidden pixels back to 35, tooltip yes
+
+Keyboard: the chevron is reachable by Tab (8 hops), focus-visible ring drawn: true
+  wrote 06-after-keyboard-focus-ring.png
+  Enter opened the row: hidden pixels 1, aria-expanded true
+  wrote 07-after-expanded-by-keyboard.png
+
+Selection: the text block is a <DIV> with user-select:auto; dragging across the title selected "Rework the charted next column so the reason a task is waiti"
+
+Row heights and page overflow, pre-change template vs this branch:
+  360px  before heights 59,60,60,59,60,59,60 overflow 104px
+  360px  after  heights 96,60,97,79,60,79,60 overflow 104px
+  480px  before heights 59,60,60,59,60,59,60 overflow 0px
+  480px  after  heights 96,60,97,79,60,79,60 overflow 0px
+  768px  before heights 59,60,60,59,60,59,60 overflow 0px
+  768px  after  heights 96,60,80,79,60,79,60 overflow 0px
+  1280px  before heights 59,60,60,59,60,59,60 overflow 0px
+  1280px  after  heights 96,60,97,79,60,79,60 overflow 0px
+
+Fail open, every layout metric forced to 0: body.bb-measured=false, 7/7 rows keep a tooltip
+  chevrons: grid/enabled (7 rows)
+  wrote 09-fail-open-zero-metrics.png
+
+Phone profile 390x844: (hover: hover) matches = false, so no mouse hover is available here
+  the clipping Charted Next row hides 233px, chevron hit area 44x44
+  after a touch tap on the chevron: hides 0px, aria-expanded=true
+  wrote 11-phone-390-collapsed.png and 12-phone-390-expanded-by-tap.png
+
+Rows that hide nothing must keep their pre-change height. Heights of the three short rows:
+  360px  pre-change template
+         Handle oversized snapshot inputs: 60px
+         Short underway row: 60px
+         Trim board comments: 60px
+  360px  visibility:hidden (5096eb9)
+         Handle oversized snapshot inputs: 80px (chevron grid, 44px wide)
+         Short underway row: 80px (chevron grid, 44px wide)
+         Trim board comments: 60px (chevron grid, 44px wide)
+  360px  display:none (HEAD c3f91a7)
+         Handle oversized snapshot inputs: 60px (chevron none, 0px wide)
+         Short underway row: 60px (chevron none, 0px wide)
+         Trim board comments: 60px (chevron none, 0px wide)
+  480px  pre-change template
+         Handle oversized snapshot inputs: 60px
+         Short underway row: 60px
+         Trim board comments: 60px
+  480px  visibility:hidden (5096eb9)
+         Handle oversized snapshot inputs: 60px (chevron grid, 44px wide)
+         Short underway row: 60px (chevron grid, 44px wide)
+         Trim board comments: 60px (chevron grid, 44px wide)
+  480px  display:none (HEAD c3f91a7)
+         Handle oversized snapshot inputs: 60px (chevron none, 0px wide)
+         Short underway row: 60px (chevron none, 0px wide)
+         Trim board comments: 60px (chevron none, 0px wide)

@@ -1,0 +1,35 @@
+vw    row                       h(before)  h(after)  clipped px before  clipped px after
+360   Add a per-dispatch Pi     59         96        1302               272
+360   Handle oversized snaps    60         97        86                 39
+360   Short charted row         60         60        0                  0
+360   Rework the charted nex    59         79        604                117
+360   Short underway row        60         80        0                  0
+360   Settle watcher deliver    59         79        813                98
+360   Short landed row          60         60        0                  0
+360   <page overflow-x>         104        104       -                  -
+480   Add a per-dispatch Pi     59         96        1062               72
+480   Handle oversized snaps    60         80        0                  0
+480   Short charted row         60         60        0                  0
+480   Rework the charted nex    59         79        484                39
+480   Short underway row        60         60        0                  0
+480   Settle watcher deliver    59         79        693                39
+480   Short landed row          60         60        0                  0
+480   <page overflow-x>         0          0         -                  -
+768   Add a per-dispatch Pi     59         96        486                0
+768   Handle oversized snaps    60         60        0                  0
+768   Short charted row         60         60        0                  0
+768   Rework the charted nex    59         79        196                0
+768   Short underway row        60         60        0                  0
+768   Settle watcher deliver    59         79        405                0
+768   Short landed row          60         60        0                  0
+768   <page overflow-x>         0          0         -                  -
+1280  Add a per-dispatch Pi     59         96        808                36
+1280  Handle oversized snaps    60         60        0                  0
+1280  Short charted row         60         60        0                  0
+1280  Rework the charted nex    59         79        357                20
+1280  Short underway row        60         60        0                  0
+1280  Settle watcher deliver    59         79        566                20
+1280  Short landed row          60         60        0                  0
+1280  <page overflow-x>         0          0         -                  -
+
+clipped pixels across every row with all clipping rows expanded: 0

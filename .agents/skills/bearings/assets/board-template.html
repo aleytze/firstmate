@@ -289,8 +289,9 @@ a { color: inherit; text-decoration: none; }
 .bb-row.is-open .bb-row__more-chip { transform: rotate(180deg); }
 /* Before the clip measurement runs - and anywhere it cannot - every row keeps
    its affordance, so the text is never unreachable. Once measured, only rows
-   that actually hide something advertise it. */
-body.bb-measured .bb-row:not(.bb-row--clip) .bb-row__more { visibility: hidden; }
+   that actually hide something advertise it, and the rest leave the layout so
+   no chevron column is reserved against their text. */
+body.bb-measured .bb-row:not(.bb-row--clip) .bb-row__more { display: none; }
 .bb-row__id { font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--text-faint); white-space: nowrap; }
 .bb-row__pr { font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 600; color: var(--ocean-600); white-space: nowrap; }
 .bb-row__pr:hover { text-decoration: underline; }

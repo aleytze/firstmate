@@ -1,0 +1,53 @@
+### Isolated exercise of test_herdr_ci_family_run_has_a_step_timeout (tests/fm-test-run.test.sh)
+### host: Linux 6.6.87.2-microsoft-standard-WSL2 | ruby: <not installed> | python3 PyYAML: 6.0.3
+
+== 1. repo-wide scan for ruby references (user intent: zero remain) ==
+$ grep -rInE "\bruby\b|\.rb\b|Gemfile|rbenv|bundler|gem install" --exclude-dir=.git .
+(no matches -> repo has no ruby reference)
+
+== 2. base commit 8f7b79c: the OLD ruby-based test on a machine without ruby ==
+$ run-one.sh <repo> base-fm-test-run.test.sh
+not ok - ruby is required to parse .github/workflows/ci.yml as YAML
+exit=1
+
+== 3. target commit a2e19a7: same test, plus a 'ruby' stub on PATH that hard-fails if invoked ==
+$ PATH=$WORK/rubytrap:$PATH run-one.sh <repo> tests/fm-test-run.test.sh
+ok - Herdr CI family-run step times out at 20 min under a 75 min job backstop
+exit=0
+
+== 4. the guard is still live: mutate ci.yml, the test must catch it ==
+-- 4a. drop 'timeout-minutes' from the 'Run real-Herdr family (serial, required)' step --
+family-run step has no timeout-minutes
+not ok - could not parse tests-herdr timeouts from ci.yml
+exit=1
+-- 4b. raise that step's timeout to 90 (above the 75 min job cap) --
+not ok - family-run step timeout must be 20 minutes, got 90
+exit=1
+-- 4c. unmutated copy of the same fixture repo still passes --
+ok - Herdr CI family-run step times out at 20 min under a 75 min job backstop
+exit=0
+
+== 5. PyYAML unavailable (an 'import yaml' that raises ImportError is shimmed onto PYTHONPATH) ==
+-- 5a. under GitHub Actions: must FAIL closed --
+not ok - python3 PyYAML not found (required to parse .github/workflows/ci.yml as YAML)
+exit=1
+-- 5b. under generic CI=true: must FAIL closed --
+not ok - python3 PyYAML not found (required to parse .github/workflows/ci.yml as YAML)
+exit=1
+-- 5c. local contributor (no CI env): named skip, exit 0 --
+skip: python3 PyYAML not found (required to parse .github/workflows/ci.yml as YAML)
+exit=0
+
+== 6. ruby inventory, before vs after ==
+$ git grep -In -iE 'ruby' 8f7b79c   # base commit
+  8f7b79c:tests/fm-test-run.test.sh:1301:  command -v ruby >/dev/null 2>&1 \
+  8f7b79c:tests/fm-test-run.test.sh:1302:    || fail "ruby is required to parse .github/workflows/ci.yml as YAML"
+  8f7b79c:tests/fm-test-run.test.sh:1304:  json=$(ruby -ryaml -rjson -e '
+
+$ grep -rIn -iE 'ruby|\.rb$|Gemfile|rbenv|bundle exec|gem install' --exclude-dir=.git .   # target commit
+  (case-insensitive sweep: no matches - the repo's last ruby reference is gone)
+
+== 7. host provenance of the replacement parser ==
+$ dpkg -S $(python3 -c 'import yaml,os;print(os.path.dirname(yaml.__file__))')
+  python3-yaml: /usr/lib/python3/dist-packages/yaml
+  (PyYAML here is the distro python3-yaml dist-package, not a repo-installed dependency)

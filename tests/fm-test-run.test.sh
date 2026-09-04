@@ -1299,6 +1299,9 @@ test_herdr_ci_family_run_has_a_step_timeout() {
   # the 75-minute job cap. Parse the workflow as YAML so nested `with.name`
   # artifact keys cannot masquerade as the step contract.
   if ! python3 -c 'import yaml' >/dev/null 2>&1; then
+    if [ "${GITHUB_ACTIONS:-}" = true ] || [ "${CI:-}" = true ]; then
+      fail "python3 PyYAML not found (required to parse .github/workflows/ci.yml as YAML)"
+    fi
     echo "skip: python3 PyYAML not found (required to parse .github/workflows/ci.yml as YAML)"
     return 0
   fi

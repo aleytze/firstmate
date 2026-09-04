@@ -1298,6 +1298,15 @@ test_herdr_ci_family_run_has_a_step_timeout() {
   # The required Herdr lane's hang tripwire is the family-run *step* bound, not
   # the 75-minute job cap. Parse the workflow as YAML so nested `with.name`
   # artifact keys cannot masquerade as the step contract.
+  #
+  # PyYAML is not a declared prerequisite, so a contributor without it skips
+  # instead of being blocked. That skip must never stand under CI: the runner's
+  # detect_gate_skip only reads the *first* non-empty line of a script's output,
+  # so a skip printed by this case - one of the last in a long file - is
+  # invisible to it, and the run is still recorded gate_skip=false under a
+  # family whose expected class is none. The tripwire would go unchecked while
+  # the timing artifact called the script fully run, so a CI runner missing the
+  # parser is a hard failure rather than a quiet degradation.
   if ! python3 -c 'import yaml' >/dev/null 2>&1; then
     if [ "${GITHUB_ACTIONS:-}" = true ] || [ "${CI:-}" = true ]; then
       fail "python3 PyYAML not found (required to parse .github/workflows/ci.yml as YAML)"
